@@ -1798,8 +1798,7 @@ fn externalNamespaceStat(path_address: usize, destination: usize, flags: usize) 
 }
 
 fn externalResourceFstat(descriptor: usize, destination: usize) usize {
-    const reference = syscall_bindings.resolve(descriptor) orelse return negativeErrno(9);
-    const description = syscall_resources.resolve(reference) orelse return negativeErrno(9);
+    const description = linux_rv64_fstat.resolveDescription(&syscall_resources, &syscall_bindings, descriptor) catch |err| return negativeErrno(linux_rv64_fstat.linuxErrno(err));
     const backend = @intFromEnum(description.backend);
     if (backend != 0x100 and backend != 0x101) return negativeErrno(95);
     const manifest_offset = description.state >> 32;

@@ -1,4 +1,21 @@
 const std = @import("std");
+const resource_tables = @import("bounded-resource-table");
+
+pub const ResolveError = error{BadDescriptor};
+
+pub fn linuxErrno(err: ResolveError) usize {
+    return switch (err) {
+        error.BadDescriptor => 9, // EBADF
+    };
+}
+
+/// Resolve through both ownership tables before interpreting resource
+/// metadata. An unbound descriptor and a stale binding have the same Linux
+/// EBADF identity at the compatibility edge.
+pub fn resolveDescription(resources: anytype, bindings: anytype, descriptor: usize) ResolveError!@TypeOf(resources.*).Description {
+    const reference = bindings.resolve(descriptor) orelse return error.BadDescriptor;
+    return resources.resolve(reference) orelse error.BadDescriptor;
+}
 
 /// The compatibility-edge subset of Linux asm-generic `struct stat` needed by
 /// already-open Morphic resources.  Callers retain ownership of the resource;
@@ -42,4 +59,21 @@ test "copyout failure is explicit" {
         }
     };
     try std.testing.expectError(error.InvalidUserMemory, copyOut(.{ .inode = 1, .mode = 0o010600, .size = 0 }, 0, Reject.copy));
+}
+
+test "unbound descriptor is EBADF without resource or binding mutation" {
+    const Resources = resource_tables.ResourceTable(2);
+    const Bindings = resource_tables.BindingTable(Resources.ResourceRef, 4);
+    var resources = Resources{};
+    var bindings = Bindings{};
+    const reference = try resources.create(.{ .backend = @enumFromInt(0x101), .capabilities = .{}, .state = 29 });
+    try bindings.bindAt(1, reference);
+
+    try std.testing.expectError(error.BadDescriptor, resolveDescription(&resources, &bindings, 3));
+    try std.testing.expectEqual(@as(usize, 9), linuxErrno(error.BadDescriptor));
+    try std.testing.expectEqual(@as(usize, 1), resources.count());
+    try std.testing.expectEqual(@as(?usize, 1), resources.referenceCount(reference));
+    try std.testing.expectEqual(reference, bindings.resolve(1).?);
+    try std.testing.expect(bindings.resolve(3) == null);
+    try std.testing.expectEqual(@as(usize, 29), resources.resolve(reference).?.state);
 }

@@ -27,8 +27,10 @@ resource state (including offset) nor creates/releases a descriptor or
 resource. There are no apk, library-name, path, fd, or payload special cases.
 
 The new focused tests prove coherent regular-file encoding, including block
-count rounding, and explicit copyout failure. Decoder coverage is retained by
-the freestanding compile-time drift assertion. The new test is part of
+count rounding, explicit copyout failure, and deterministic Linux `EBADF` for
+an unbound descriptor while resource count, reference count, binding topology,
+and resource state remain unchanged. Decoder coverage is retained by the
+freestanding compile-time drift assertion. The new test is part of
 `zig build test-recipe-run-hosted-morphic-runtime`.
 
 ## Exact real-QEMU evidence
@@ -85,6 +87,13 @@ Passed during implementation:
 - the canonical namespace artifact verification and namespace-backed
   freestanding build above
 - two real system-QEMU retries of the unchanged command
+
+The PR #94 validation repair regenerated all 60 canonical unit/smoke evidence
+records after the root build wiring changed, then passed the focused Morphic
+recipe tests, `zig fmt --check build.zig projects recipes conformance`,
+`zig build check`, and
+`python3 tools/developer-command.py validate-repository` under Zig 0.14.0.
+This repair does not change the measured QEMU frontier described above.
 
 The final assembly also runs formatting, command-reference, diff, focused, and
 available aggregate checks; their exact outcomes are recorded in the final

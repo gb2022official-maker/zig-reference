@@ -22,6 +22,10 @@ This directory contains the long-form project record. The repository root is int
 - [`research/FRESH_AGENT_ADVANCEMENT_AND_INHERITABLE_TECHNICAL_KNOWLEDGE.md`](research/FRESH_AGENT_ADVANCEMENT_AND_INHERITABLE_TECHNICAL_KNOWLEDGE.md) — research note defining Fresh-Agent Advancement, Inheritable Technical Knowledge, the Inheritance Delta, Agentic Compounding, anti-gaming controls, and a benchmark protocol for asking whether equally capable fresh agents can reach farther as repository knowledge accumulates.
 - [`research/fresh-agent-advancement.json`](research/fresh-agent-advancement.json) — compact machine-readable companion containing the canonical question, vocabulary, benchmark measurements, controls, inheritance artifacts, and anti-claim for agent consumption.
 
+A question tying much of the Morphic research program together is:
+
+> **How much operating system is actually fundamental, and how much is personality?**
+
 `research/` contains durable research proposals, experimental frameworks, and research-program definitions. Research documents may motivate future work, but they are not evidence that the proposed capabilities already exist.
 
 ## Benchmarks

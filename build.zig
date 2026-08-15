@@ -261,6 +261,12 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }) });
             recipe_step.dependOn(&b.addRunArtifact(clone_request_tests).step);
+            const fstat_tests = b.addTest(.{ .root_module = b.createModule(.{
+                .root_source_file = b.path("recipes/run-hosted-morphic-runtime/src/linux_rv64_fstat.zig"),
+                .target = target,
+                .optimize = optimize,
+            }) });
+            recipe_step.dependOn(&b.addRunArtifact(fstat_tests).step);
             const mapping_preflight_tests = b.addTest(.{ .root_module = b.createModule(.{
                 .root_source_file = b.path("recipes/run-hosted-morphic-runtime/src/bounded_mapping_preflight.zig"),
                 .target = target,

@@ -50,6 +50,50 @@ Those projects help establish that AI-assisted kernel and OS development can pro
 
 This is not a claim that Morphic is superior to SlopOS, VibeOS, Linux, or any other system. It is a statement of research direction. Different projects can be excellent answers to different questions.
 
+### Kerla: a useful Linux-ABI comparison
+
+[Kerla](https://github.com/nuta/kerla) is one of the most useful comparison points for Morphic because it pursued a closely related practical idea from a very different design and historical direction: a monolithic Rust kernel, written from scratch for x86_64, whose explicit goal is to run unmodified Linux binaries through Linux ABI compatibility.
+
+Kerla is broader than Morphic today in several traditional kernel areas. Its documented surface includes `fork`, `execve`, `wait4`, signals, `mmap`, pipes, `poll`, tmpfs/devfs, TCP/IP through smoltcp, tty/pty support, QEMU and Firecracker, and an SSH demonstration. Morphic does **not** currently claim equivalent breadth: it still lacks general networking, broad signal semantics, poll/epoll-class readiness, a native completed TTY/pty stack, a general filesystem, and many other Linux interfaces.
+
+There is also an interesting difference in what each project proved. Kerla's README explicitly notes that its experimental Docker-image path could not be expected to run most images and gives unimplemented position-independent executables used by Alpine Linux as an example. Morphic is already running an unchanged dynamic Alpine v3.22.0 RV64 musl/BusyBox environment through the real userspace interpreter, with a persistent shell, external processes, writable runtime state, external read-back, and a real pipeline. At the opening Batch 32R `apk` frontier, the real `/sbin/apk` binary already reaches `execve` commit and its dynamic loader opens `/usr/lib/libcrypto.so.3` and `/usr/lib/libapk.so.2.14.9` before encountering the next missing Linux/RV64 metadata semantic. See [`docs/plans/CODEX_AGENTIC_SNOWBALL_BATCH_32R_FSTAT_TO_APK_VERSION_MAXIMUM_CAUSAL_PROGRESS_MANDATORY_30MIN_HANDOFF.txt`](docs/plans/CODEX_AGENTIC_SNOWBALL_BATCH_32R_FSTAT_TO_APK_VERSION_MAXIMUM_CAUSAL_PROGRESS_MANDATORY_30MIN_HANDOFF.txt).
+
+**That does not make Morphic “more complete” than Kerla.** The projects have accumulated capability in different directions. Kerla currently demonstrates a much wider conventional Unix/kernel surface; Morphic has reached unusually deep modern Alpine/dynamic-userspace compatibility on a narrower RV64 substrate.
+
+A compact comparison:
+
+| Dimension | Kerla | Morphic / Alpz today |
+|---|---|---|
+| Implementation direction | Monolithic Rust kernel | Zig-centered Morphic substrate + Alpz RV64 machine path + Linux personality |
+| Primary architecture | x86_64 | RV64 |
+| Linux-process breadth | Broad `fork`/`execve`/`wait4`, signals, mmap, poll, etc. | Bounded clone/exec model sufficient for the current Alpine acceptance path; much narrower overall |
+| IPC / readiness | Pipe and poll documented | Bounded pipe2 byte streams; no general poll/epoll claim |
+| Terminal support | tty + pty documented | Guest console works; human-friendly PTY+picocom host path; native complete TTY/termios semantics not yet claimed |
+| Networking | TCP/IP, UDP/TCP sockets, SSH demo | Not yet implemented |
+| Filesystem direction | initramfs root plus tmpfs/devfs | Exact immutable Alpine namespace plus deliberately tiny bounded writable runtime overlay |
+| Alpine-specific proof | README identifies Alpine PIE as an obstacle in its experimental image path | Exact Alpine v3.22.0 RV64 dynamic musl/BusyBox shell is Playable; real `apk` loader pressure is underway |
+| Current maturity claim | Historical project with a much broader demonstrated system surface; no longer maintained | Fast-moving research prototype; explicitly not production-ready |
+
+#### The rate of progress is extraordinary, but the stopwatch needs context
+
+The Morphic chronology is unusually fast in a narrow, measurable sense. The preserved repository baseline is **2026-08-04 04:32 CST** and the Playable Alpine merge is **2026-08-15 15:39:43 CST**: **275.13 hours, or 11 days 11 hours 7 minutes 43 seconds** of calendar time. From the first static BusyBox shell milestone to Playable Alpine was only **45.64 hours**, or just under two days.
+
+That is an extraordinary research-prototyping velocity result. In less than two calendar weeks the project moved from its preserved baseline to real dynamic musl, real BusyBox, an exact 517-object Alpine namespace, a persistent interactive shell, clone/exec external commands, directory enumeration, immutable file reads, cwd, bounded writable state, descriptor replacement, external read-back, and a real pipe carrying bytes between unchanged Alpine processes. On the same day Playable Alpine was earned, the next real pressure had already moved inside `/sbin/apk`'s dynamic-loader path.
+
+But **11.5 calendar days is not the same thing as 275 engineer-hours**, and it should not be presented that way. This repository uses intensive AI-assisted/agentic iteration, automated validation, preserved causal handoffs, and rapid retry loops. There is no honest one-to-one conversion from wall-clock time here to the labor time of a conventional single developer or team. The useful metric is **time-to-reproducible capability frontier**, not a claim about equivalent human-hours.
+
+Kerla provides a good historical control for that distinction. Its public GitHub repository was created on May 18, 2021, but author Seiya Nuta wrote the next day in [“Writing a Linux-compatible kernel in Rust”](https://seiya.me/blog/writing-linux-clone-in-rust) that he had already been working on Kerla for **recent months** and had implemented fork/exec, file operations, TCP/UDP sockets, signals, tty/pty, pipes, poll, and more. In other words, Kerla's public repository creation date is not its true project stopwatch; the substantial early feature set represented months of prior work.
+
+There is also a striking modern reference from the same author. In 2026 Nuta documented [“New microkernel OS in 10 days: From zero to Google Compute Engine”](https://seiya.me/blog/new-microkernel-os-in-10-days), showing that a highly experienced systems engineer with accumulated knowledge and modern tooling can compress a serious OS prototype into roughly a ten-day experiment. In that project he says GPT-5.2-Codex was used for review and debugging rather than agentic coding. The goals and architecture are different, so this is not a race result; it is a useful real-world calibration that **ten-day-scale operating-system leaps are possible when expertise, tooling, scope, and feedback loops line up**.
+
+Kerla also demonstrates how much farther “real deployment” is from an early compatibility milestone. By December 2021, Nuta documented [running his personal website on Kerla](https://seiya.me/blog/this-website-is-now-powered-by-kerla): two Kerla VMs behind a load balancer, each on a 1-core / 1-GB server, with crash recovery, metrics, and alerting. He also documented remaining instability and periodic reboots from memory exhaustion. That is a concrete level of operational maturity Morphic has **not** reached; Morphic's current proof remains a QEMU-centered research environment.
+
+So the remarkable claim should stay precise:
+
+> **In about 11.5 calendar days, Morphic reached a reproducible Playable Alpine RV64 frontier that includes unchanged dynamic musl/BusyBox userspace and immediately began pressuring the real Alpine package manager. That rate is genuinely exceptional for systems research prototyping. It is not evidence that Morphic already matches the breadth, deployment maturity, or production experience of longer-running kernels such as Kerla.**
+
+The comparison becomes more interesting, not less, if both facts remain visible at once: **Kerla is broader; Morphic's measured early compatibility velocity is unusually high.**
+
 ### A possible first-of-its-kind Zig milestone
 
 There are already operating-system kernels written in Zig, and there are already non-Linux systems capable of running Linux software. The narrower combination pursued here appears much rarer. **To the best of our current public-source search, we have not found another publicly documented Zig-written, non-Linux RISC-V kernel/substrate that runs an unchanged real Alpine Linux musl/BusyBox userspace through a Linux ABI compatibility edge.**

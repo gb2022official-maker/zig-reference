@@ -94,6 +94,79 @@ So the remarkable claim should stay precise:
 
 The comparison becomes more interesting, not less, if both facts remain visible at once: **Kerla is broader; Morphic's measured early compatibility velocity is unusually high.**
 
+### Historical lineage: Linux compatibility without the Linux kernel
+
+Morphic did not invent the idea of running Linux software above a non-Linux kernel, and the project should not become more impressive by forgetting the systems that proved important parts of this idea first. The historical comparisons make the current result easier to place accurately.
+
+**FreeBSD's Linuxulator** is a long-running compatibility precedent. FreeBSD documents an optional Linux binary-compatibility layer that can run unmodified Linux binaries on the FreeBSD kernel, with Linux userland libraries installed alongside it. This demonstrates that a mature non-Linux Unix kernel can inherit substantial Linux software through an ABI compatibility layer rather than by becoming Linux. See the [FreeBSD Handbook's Linux Binary Compatibility chapter](https://docs.freebsd.org/en/books/handbook/linuxemu/).
+
+**WSL 1** is another important historical comparison. Microsoft's original Windows Subsystem for Linux executed unmodified Linux ELF binaries by exposing Linux-compatible kernel interfaces above Windows NT. Its clean-room subsystem translated Linux syscalls to Windows functionality where a useful mapping existed and implemented other Linux semantics itself. Modern WSL 2 instead uses a real Linux kernel in a managed VM, so the architectural comparison here is specifically with WSL 1. See Microsoft's [WSL architectural overview](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/cmdline/wsl-architectural-overview) and [WSL version comparison](https://learn.microsoft.com/en-us/windows/wsl/compare-versions).
+
+**Google Fuchsia's Starnix** is conceptually one of the closest mature relatives to what Morphic is exploring. Fuchsia describes Starnix as allowing unmodified Linux programs to run on Fuchsia without putting those programs inside a Linux virtual machine. Starnix implements the Linux UAPI in a Fuchsia userspace process and translates Linux syscall requests into the appropriate Fuchsia subsystems. Its explicit compatibility goal is much broader and higher-fidelity than Morphic's current surface. See [Fuchsia's Starnix overview](https://fuchsia.dev/fuchsia-src/concepts/starnix) and [Starnix kernel design](https://fuchsia.dev/fuchsia-src/concepts/starnix/kernel).
+
+And there is already strong prior art for the **browser** side. [WebVM](https://github.com/leaningtech/webvm) runs a Linux-compatible environment fully client-side in HTML5/WebAssembly. Its CheerpX engine provides an x86-to-WebAssembly JIT compiler, virtual storage, and a Linux syscall emulator, and WebVM explicitly demonstrates an Alpine/Xorg/i3 graphical environment in the browser. Therefore Morphic should never claim to be the first Linux desktop in a browser, or the first Alpine environment in a browser.
+
+The interesting comparison is the combination and where execution lives:
+
+```text
+STARNIX
+unmodified Linux program
+        |
+        v
+Linux UAPI implemented by Starnix
+        |
+        v
+Fuchsia subsystems
+
+WEBVM
+browser
+        |
+        v
+WebAssembly / CheerpX
+        |
+        v
+x86 translation + Linux syscall emulation
+        |
+        v
+Linux userspace, including Alpine/Xorg/i3
+
+MORPHIC TARGET
+browser (optional display client)
+        ^
+        |
+framebuffer / remote-display transport
+        ^
+        |
+unchanged Alpine graphical userspace
+        |
+real Alpine apk/package ecosystem
+        |
+Linux personality
+        |
+Morphic neutral substrate
+        |
+Alpz
+        |
+RV64
+```
+
+That last distinction is important: **the planned browser is a window into the Morphic machine, not the execution substrate that makes Linux compatibility possible.** The Alpine processes would still execute against Morphic/Alpz through the Linux personality; the browser would only carry display and input.
+
+A broader comparison helps keep the claim precise:
+
+| System | Non-Linux substrate? | Unmodified Linux binaries? | Linux kernel required for the compatibility path? | Graphical/browser precedent | What it establishes relative to Morphic |
+|---|---|---|---|---|---|
+| FreeBSD Linuxulator | Yes, FreeBSD | Yes | No | Not the defining goal | Mature Linux ABI compatibility on another Unix kernel |
+| WSL 1 | Yes, Windows NT | Yes | No | Windows desktop integration | Large-scale syscall/semantic translation can support a distribution userland and package management |
+| Kerla | Yes, from-scratch Rust kernel | Yes | No | tty/pty + SSH, not browser-desktop focused | A small independent kernel can build a broad Linux-compatible Unix surface |
+| Fuchsia Starnix | Yes, Fuchsia | Yes | No Linux VM for the Starnix compatibility interface | Android/Linux application integration | Modern high-fidelity Linux UAPI compatibility on a radically different OS architecture |
+| WebVM / CheerpX | Browser/WebAssembly runtime | Yes for supported x86 Linux userspace | No native Linux kernel in the browser path | Alpine/Xorg/i3 in-browser | Browser delivery of a real Linux-compatible graphical environment is already proven |
+| Morphic / Alpz today | Yes, Zig-centered RV64 substrate | Yes, within the currently proven Alpine slice | No | Browser desktop is a future target | Exact Alpine v3.22.0 RV64 musl/BusyBox is already Playable while the substrate remains deliberately narrow and evidence-driven |
+
+The achievement is therefore **not** “nobody has ever run Linux binaries without Linux” and **not** “nobody has ever put Alpine in a browser.” Both would be false historical framings. The more defensible and more interesting claim is that Morphic is assembling an unusual combination: a Zig-centered, RV64, non-Linux substrate; unchanged modern Alpine musl/BusyBox; a real Alpine `apk` compatibility frontier; an explicitly measured semantic-growth history; and, if later earned, a graphical Alpine environment whose browser is merely a remote presentation endpoint.
+
+To the best of the project's current public-source search, we have not yet found another public system documenting that exact combination. That is evidence for an unusual research position, not proof of global priority. If a predecessor is found, it should be added here.
+
 ### A possible first-of-its-kind Zig milestone
 
 There are already operating-system kernels written in Zig, and there are already non-Linux systems capable of running Linux software. The narrower combination pursued here appears much rarer. **To the best of our current public-source search, we have not found another publicly documented Zig-written, non-Linux RISC-V kernel/substrate that runs an unchanged real Alpine Linux musl/BusyBox userspace through a Linux ABI compatibility edge.**
@@ -404,7 +477,7 @@ The goal is not the smallest kernel at any cost. It is the smallest coherent fou
 
 **Morphic now runs the exact Alpine v3.22.0 RV64 namespace through the real musl interpreter and BusyBox `/bin/sh`, preserves a persistent interactive shell, executes real external BusyBox applets through bounded clone/exec, enumerates and reads the genuine serialized namespace, maintains bounded per-process current-working-directory state, supports a bounded writable runtime namespace, and now carries real bytes through a bounded pipe between unchanged Alpine processes while preserving descriptor/resource ownership and parent-shell liveness.**
 
-Batch 32Q closed the pipeline gate and the PR #93 ownership follow-up repaired the two subtle lifetime holes exposed during review: writer/endpoint discovery now spans both active child state and the suspended parent snapshot, and dup3 displacement runs the same ownership-aware final-pipe retirement check. The generic dup3 helper remains pipe-independent.
+Batch 32Q closed the pipeline gate and the PR #93 ownership review follow-up repaired the two subtle lifetime holes exposed during review: writer/endpoint discovery now spans both active child state and the suspended parent snapshot, and dup3 displacement runs the same ownership-aware final-pipe retirement check. The generic dup3 helper remains pipe-independent.
 
 ```text
 exact Alpine v3.22.0 RV64 minirootfs       PASS
@@ -534,6 +607,135 @@ echo still-alive
 ```
 
 `apk` is now the pressure source rather than a single syscall milestone. Local package work comes before networking so filesystem/database/package-transaction semantics can be isolated from DNS/TCP/TLS. Only after a real local `.apk` can be installed should the campaign add the network substrate required for `apk update` and `apk add` against real Alpine repositories.
+
+## Plan: Playable Alpine -> apk -> browser-accessible Morphic desktop
+
+The graphical goal is deliberately staged. **A working `apk --version` is not yet a desktop, and a working networked package manager is not yet a graphical stack.** Each rung should be earned by unchanged software pressure so the project can record which new semantics actually became necessary.
+
+The shortest intended path is:
+
+```text
+★ PLAYABLE ALPINE UNDER MORPHIC ★
+        |
+        v
+real /sbin/apk --version
+        |
+        v
+apk --help
+        |
+        v
+apk info + local package database
+        |
+        v
+install a hash-pinned local .apk
+        |
+        v
+run the newly installed program
+        |
+        v
+★ LOCAL APK UNDER MORPHIC ★
+        |
+        v
+sockets / DNS / clocks / entropy
+        |
+        v
+userspace TLS + CA trust
+        |
+        v
+apk update + apk add from Alpine repositories
+        |
+        v
+★ NETWORKED APK UNDER MORPHIC ★
+        |
+        v
+software framebuffer / virtual display
+        |
+        v
+one real graphical Alpine client draws pixels
+        |
+        v
+lightweight X server + terminal + window manager
+        |
+        v
+mouse / keyboard / multiple-window interaction
+        |
+        v
+RFB/VNC-like framebuffer transport
+        |
+        v
+WebSocket / browser display client
+        |
+        v
+★ ALPINE DESKTOP IN A BROWSER UNDER MORPHIC ★
+        |
+        v
+Morphic panel / launcher / file browser / settings / session shell
+```
+
+### Gate 1: make `apk` a real local package manager
+
+The immediate package-manager ladder remains `/sbin/apk --version`, `apk --help`, then local database pressure such as `apk info`. Once startup is clean, the next major acceptance gate is not a version string: it is a real, hash-pinned local `.apk` being extracted and installed, the package database being updated coherently, and an executable from that package running unchanged afterward.
+
+That phase should admit filesystem semantics only when real `apk` proves them causal: directory creation, unlink/rename replacement, richer metadata, directory-relative operations, permission/mode behavior, component-wise symlink traversal, atomic temporary-file replacement, locking or sync behavior if actually demanded, and a larger bounded writable store. The target is **★ LOCAL APK UNDER MORPHIC ★**, not a speculative syscall checklist.
+
+### Gate 2: let Alpine fetch its own software
+
+After local package transactions work, add the minimum networking substrate demanded by real Alpine tooling: sockets first, then DNS, clocks/timeouts, entropy, and userspace TLS/CA trust as observed. Morphic should provide neutral networking/time/entropy primitives; TLS should remain an Alpine userspace concern rather than becoming a special kernel feature.
+
+The acceptance sequence is `apk update`, `apk add <small-package>`, then successful execution of the newly installed command. That earns **★ NETWORKED APK UNDER MORPHIC ★** and changes the development model: Alpine's package ecosystem itself becomes the workload-delivery mechanism.
+
+### Gate 3: prove one real graphical program before building a desktop
+
+The fastest first graphical path should favor a **software/headless display** rather than beginning with DRM, Mesa, virtio-gpu, hardware acceleration, or a complete modern desktop environment. First make one unchanged Alpine graphical client draw into a virtual framebuffer or X-compatible display. Then let that real workload expose whatever memory mapping, signals, threading/futex, poll/readiness, Unix sockets, shared memory, clocks, process groups, PTYs/termios, or other semantics are actually causal.
+
+The rule remains unchanged:
+
+```text
+observe the real graphical failure
+        -> classify it
+        -> implement the smallest general repair
+        -> prove causality
+        -> retry the same graphical artifact
+```
+
+### Gate 4: grow the smallest usable desktop
+
+Once one window works, add a lightweight terminal emulator and window manager, then mouse/keyboard input and multiple windows. Existing Alpine packages should be reused wherever possible. An Xfce-, LXQt-, i3-, or similarly lightweight collection may provide temporary visible pieces, but no specific desktop package is a commitment: real pressure, package availability, memory cost, and simplicity should decide the first stack.
+
+The first graphical milestone should optimize for **proof and accessibility**, not visual ambition. A plain terminal in a real movable window is more valuable than a beautiful mock desktop whose applications do not actually execute through Morphic.
+
+### Gate 5: make the browser a window into Morphic
+
+After a framebuffer-backed desktop exists, expose it through a bounded remote-display path such as RFB/VNC semantics and bridge that stream to a browser through WebSocket or a similarly ordinary transport. The browser should carry pixels, keyboard, pointer, clipboard, and later audio if justified.
+
+Conceptually:
+
+```text
+browser
+   ^
+   |  display + input transport
+   |
+remote framebuffer / WebSocket bridge
+   ^
+   |
+Alpine X / desktop processes
+   |
+Linux personality
+   |
+Morphic
+   |
+Alpz / RV64
+```
+
+**The browser is a client of the Morphic machine, not the machine itself.** That keeps this target architecturally distinct from browser runtimes such as WebVM, where WebAssembly and the browser environment are themselves the execution substrate for Linux compatibility.
+
+### Gate 6: replace generic desktop pieces with a Morphic identity
+
+Only after the compatibility path is real should the visible shell become recognizably Morphic. A first stage can theme existing Alpine components. Later stages can replace the panel, launcher, file browser, settings surface, terminal presentation, and session manager while ordinary Alpine applications continue underneath.
+
+The intended visual direction is warm, legible, and intentionally human-facing: **ASCII-terminal soul with classic Macintosh-like warmth**, strong hierarchy, calm spacing, clear borders, and retro-futurist character without pretending that old limitations are features.
+
+This entire desktop section is a **roadmap, not a support claim**. The current earned graphical status remains zero until a real graphical Alpine program executes and draws through Morphic. Every future star should be tied to an exact artifact, command sequence, machine trace, and reproducible acceptance gate just like Playable Alpine.
 
 ## Experience Playable Alpine in your own console
 

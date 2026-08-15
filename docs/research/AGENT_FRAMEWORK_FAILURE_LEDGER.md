@@ -89,3 +89,31 @@ Do not collapse all failures into one number. The point is to learn whether the 
 **Attribution:** **platform/tooling failure** (high confidence) limited to golden-oracle certainty and external persistence. The runtime goal itself succeeded, and no framework or agent-execution failure caused these missing external surfaces.
 
 **Corrective action:** provide a functioning RISC-V QEMU user-mode runtime, configure the repository remote, and expose the required PR creation surface; rerun the golden trace, push the preserved commit, verify its remote SHA, and open the completed (not draft) PR.
+
+## Entry 2026-08-15 — Batch 32R PR #94 inconsistent stat identity caught in review
+
+**Request / plan:** Batch 32R, `docs/plans/CODEX_AGENTIC_SNOWBALL_BATCH_32R_FSTAT_TO_APK_VERSION_MAXIMUM_CAUSAL_PROGRESS_MANDATORY_30MIN_HANDOFF.txt`, implemented Linux/RV64 `fstat(80)` so the unchanged real Alpine `/sbin/apk --version` pressure could advance beyond the loader's first metadata failure.
+
+**Pull request:** PR #94, `runtime: implement Linux/RV64 fstat(80) and advance real /sbin/apk frontier`.
+
+**PR head where the defect was confirmed:** `01dc9402f7919706d0b87e7ec18aa83d369523c5` after the first follow-up repair.
+
+**Review location:** inline Codex review comment `3790294407` on `recipes/run-hosted-morphic-runtime/src/freestanding_riscv64.zig`; merge-blocker follow-up comment `5304384841` was then added to PR #94.
+
+**Intended finish condition:** add one coherent Linux/RV64 `fstat` implementation that reuses the repository's authoritative namespace/runtime metadata semantics, preserves ownership and copyout invariants, advances the unchanged real apk command, and remains compatible with existing stat behavior.
+
+**Observed result:** the implementation successfully crossed `fstat(80)` for the real loader and exposed file-backed private executable `mmap(222)` as the next causal apk blocker. However, review found that `newfstatat(path)` and `fstat(open(path))` assigned different inode identities to the same namespace object. `newfstatat` wrote `st_ino = at + 1`, where `at` is the later `"path"` token offset, while `fstat` wrote `st_ino = manifest_offset + 1`, where `manifest_offset` is the object's canonical manifest/object offset carried in the open resource. Therefore the same file could report different `(st_dev, st_ino)` identity depending on which stat interface an application used. This can break software that compares stat results to establish object identity, including symlink-followed opens.
+
+**Why this matters:** inode identity is not merely display metadata. Once two compatibility interfaces describe the same object, their observable identity must agree. A Linux-compatibility layer that independently fabricates identity in each syscall can pass simple loader pressure while still violating cross-interface semantics.
+
+**Secondary review finding:** the PR also emitted `ZIGREF_LINUX_MMAP_REJECT` as a persistent-looking diagnostic even though the repository standard reserves the stable `ZIGREF-*` diagnostic namespace for indexed, actionable diagnostics and uses hyphenated identifiers. That marker therefore either needs to become a properly authored/indexed diagnostic or be demoted to an ordinary non-diagnostic trace marker. This was recorded separately from the inode correctness defect because it is an agent/framework observability-contract violation rather than the causal runtime blocker.
+
+**Attribution:** **agent execution failure**.
+
+**Confidence:** high for the inode-identity defect; high for the diagnostic-convention defect.
+
+**Why:** the Batch 32R plan explicitly required reuse of existing namespace/runtime metadata semantics rather than creating a separate metadata truth. The implementation instead derived inode identity differently across two stat paths. The repository's `AGENTS.md` also already documented the `ZIGREF-*` diagnostic convention. No external platform limitation forced either defect. Both were caught before merge by review.
+
+**Checkpoint decision:** do **not** merge PR #94 until the same resolved namespace object produces one canonical inode identity across `newfstatat` and `fstat`, a focused regression proves equality, the mmap rejection marker follows the repository diagnostic/trace contract, and current CI is green. Do not widen the repair into file-backed mmap implementation inside this cleanup pass; mmap remains the next causal pressure after the stat repair.
+
+**Corrective action:** centralize or reuse canonical namespace object identity for every stat-producing interface; add a permanent `stat(path)` versus `fstat(open(path))` identity regression; audit future compatibility additions for cross-interface invariants, not only per-syscall correctness; and require new `ZIGREF-*` diagnostics to be registered/indexed before they are treated as stable agent-facing evidence.

@@ -1,0 +1,181 @@
+CODEX AGENTIC SNOWBALL — BATCH 32T
+MMAP SEMANTIC REPAIR -> REAL APK -> MAXIMUM CAUSAL PROGRESS
+FULL ~30-MINUTE WORKING SLICE BEFORE FINAL HANDOFF
+
+Repository: thanks-cohn/zig-reference
+Starting branch: main
+Starting checkpoint: PR #96 merged at 80fd25c84eeb464c7813491e5a95bbe370bfcc31
+Suggested historical tag for this exact checkpoint: morphic-batch32s-file-mmap-known-eof-prot-gaps
+
+MISSION
+
+Use the full useful ~30-minute slice to repair the two known Linux file-backed mmap semantic defects inherited from Batch 32S, then immediately resume unchanged real Alpine /sbin/apk --version pressure and continue causally for the remainder of the slice.
+
+The semantic cleanup is the opening gate, not the batch endpoint. Once those two defects are repaired and proven, go directly back to the real apk command. Do not spend the remainder of the slice polishing the opening repair if it is already proven.
+
+Do not enter handoff mode early. Continue implementation + exact QEMU pressure through the useful working window. The persisted handoff is the final action at the ~30-minute boundary.
+
+KNOWN CHECKPOINT
+
+PR #96 intentionally landed the Batch 32S file-backed MAP_PRIVATE work to advance the project while preserving two known semantic defects for this fresh run.
+
+Known defect A — whole pages beyond EOF:
+
+The current planner computes byte_length = min(length, file_size - offset) while retaining mapped_length rounded from the full requested length. As a result, a request that extends by one or more complete pages past EOF can install readable zero-backed pages wholly beyond the file. Linux does not make those pages ordinary readable file contents. Because Morphic does not yet have a SIGBUS/page-fault path for this mapping class, this slice must choose the smallest correct bounded behavior: reject such mappings before mutation or leave wholly-beyond-EOF pages inaccessible, with focused permanent proof.
+
+Known defect B — unsupported protection shapes:
+
+The current planner accepts PROT_NONE and write-only protection even though the Sv39 leaf path cannot directly encode those shapes as currently wired. That can turn an accepted request into a later mapping failure and misleading ENOMEM-style behavior. The compatibility edge must handle these combinations deliberately. Use the smallest general policy consistent with Linux-visible behavior and current Morphic mechanisms. Do not silently accept a protection shape that the mapping layer cannot represent.
+
+OPENING REPAIR REQUIREMENTS
+
+1. Fix whole-page-beyond-EOF semantics before any mapping mutation.
+2. Add a permanent regression proving that only the valid final partial page tail is zero-filled and that complete pages beyond EOF never become ordinary readable zero-backed file pages.
+3. Fix or deliberately reject PROT_NONE/write-only file-backed MAP_PRIVATE shapes at the compatibility edge so they cannot fall through into misleading mapper failures.
+4. Add permanent focused tests for the chosen protection policy.
+5. Preserve existing invariants:
+   - immutable namespace source bytes;
+   - MAP_PRIVATE copy semantics;
+   - W+X=0;
+   - checked arithmetic;
+   - descriptor/file-position unchanged;
+   - resource/binding ownership unchanged;
+   - PREPARE -> COMMIT discipline;
+   - reservation and mapped-leaf rollback on failure;
+   - deterministic errno;
+   - no apk/libcrypto/path/fd special cases.
+6. Re-run focused mmap tests and the Morphic recipe gate.
+
+IMMEDIATE APK PRESSURE AFTER THE OPENING REPAIR
+
+As soon as the two semantic defects are proven, rebuild the canonical namespace-backed machine and rerun the unchanged real command:
+
+/sbin/apk --version
+
+Do this immediately. The unchanged artifact is the oracle for the next causal blocker.
+
+The previous Batch 32S evidence observed:
+
+- file-backed mmap dispatch now exists;
+- smaller libapk mapping crosses;
+- libcrypto requests 0x3b6000 bytes, approximately 950 pages;
+- current private/prepared backing capacity is 320 pages;
+- later fixed private file mapping remains downstream;
+- libz.so.1 relative-symlink ENOENT also remains downstream;
+- /sbin/apk --version does not yet succeed.
+
+Do not assume the 950-page capacity issue is still first after the semantic repair. Confirm by unchanged QEMU retry.
+
+IF THE 950-PAGE LIBCRYPTO CAPACITY FAILURE IS STILL FIRST
+
+Repair the smallest general bounded backing-capacity mechanism that can satisfy the observed mapping without overlapping caller-artifact transport or violating ownership/mapping invariants.
+
+Prefer a general provision/reservation design over a libcrypto-sized constant or path special case.
+
+After implementing it, immediately rerun the unchanged /sbin/apk --version command.
+
+CONTINUE THE SNOWBALL
+
+After every successful repair:
+
+observe exact real failure
+ -> classify
+ -> implement the smallest general mechanism
+ -> prove causality with focused tests
+ -> rerun the unchanged real command
+
+Continue this loop for the remainder of the ~30-minute working slice.
+
+Do not guess the next syscall or subsystem.
+
+If a fixed MAP_PRIVATE mapping becomes first causal, repair only the exact general fixed-mapping semantics required by the trace, preserving collision/ownership/rollback discipline.
+
+If the libz.so.1 ENOENT becomes first causal, prove whether the historical component-wise symlink gap is responsible before changing the resolver. If causal, implement the smallest bounded component-wise resolution repair with loop/traversal bounds and immutable namespace semantics.
+
+If mprotect(226), signal setup, set_tid_address, or another interface becomes first causal, follow the exact observed trace rather than a speculative campaign.
+
+APK SUCCESS LADDER
+
+If /sbin/apk --version succeeds during this slice, immediately continue:
+
+/sbin/apk --help
+
+Then:
+
+apk info
+
+If those succeed and useful working time remains, continue into the next directly exposed local package-database behavior. Do not declare the batch complete merely because a version string appears.
+
+PLAYABLE ALPINE SAFETY GATE
+
+Runtime changes must not regress the already-earned persistent shell. Before final persistence, re-prove the canonical Playable Alpine sequence if runtime changes touched mapping/resource/process behavior:
+
+echo morphic
+echo second
+pwd
+ls /
+cat /etc/alpine-release
+cd /tmp
+pwd
+echo hello > /tmp/hello
+cat /tmp/hello
+echo hello | cat
+echo still-alive
+
+Expected behavior remains unchanged.
+
+TIME DISCIPLINE
+
+Minute 0:
+- record visible time;
+- verify current main includes merge commit 80fd25c84eeb464c7813491e5a95bbe370bfcc31;
+- reproduce the current focused mmap semantic behavior and unchanged apk frontier.
+
+Useful working slice:
+- repair the two known mmap semantic defects;
+- immediately return to /sbin/apk --version;
+- continue observe -> repair -> prove -> retry through each newly exposed causal blocker;
+- keep real QEMU pressure primary.
+
+Do not make an early handoff the main task. Use the full ~30-minute slice for implementation and pressure.
+
+At the ~30-minute boundary:
+- persist the final state;
+- write docs/reports/AGENTIC_SNOWBALL_BATCH_32T.md;
+- record exact commands, QEMU evidence, tests, changed files, final commit SHA, and exactly one next causal blocker if apk is not yet through the intended ladder.
+
+The handoff is the final action after the working slice, not a substitute for it.
+
+REQUIRED REPORT
+
+Create:
+
+docs/reports/AGENTIC_SNOWBALL_BATCH_32T.md
+
+The report must include:
+- starting checkpoint commit 80fd25c84eeb464c7813491e5a95bbe370bfcc31;
+- the two inherited semantic defects and their final disposition;
+- focused regression proof;
+- every unchanged /sbin/apk --version retry and what it exposed;
+- any additional mechanisms admitted during the slice and why they were causal;
+- whether /sbin/apk --version succeeded;
+- whether --help and apk info were reached;
+- Playable Alpine regression result if runtime behavior changed;
+- exact one next causal blocker if incomplete;
+- final commit SHA.
+
+NON-GOALS
+
+Do not:
+- implement a broad mmap subsystem without evidence;
+- add apk/libcrypto-specific special cases;
+- chase individual relocation symbols while required shared objects are not loading correctly;
+- widen into networking, TLS, DNS, sockets, or package installation unless the real apk command reaches them causally;
+- spend the slice on documentation before useful implementation/QEMU pressure is exhausted;
+- perform the final handoff substantially before the ~30-minute working boundary.
+
+SUCCESS CONDITION
+
+The preferred outcome is real /sbin/apk --version success, followed immediately by --help and apk info if time permits.
+
+If that is not reached, success means the two inherited mmap semantic defects are repaired, the unchanged real apk command was repeatedly retried after each causal repair, maximum evidence-backed progress was made for the full useful slice, Playable Alpine remains intact, and exactly one next causal blocker is persisted at the end.

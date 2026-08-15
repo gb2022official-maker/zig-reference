@@ -1,0 +1,272 @@
+CODEX AGENTIC SNOWBALL — BATCH 32S
+STAT IDENTITY REPAIR + FILE-BACKED MMAP(222) -> REAL APK VERSION
+MAXIMUM CAUSAL PROGRESS — MANDATORY ~30-MINUTE PERSISTED HANDOFF
+
+Repository: thanks-cohn/zig-reference
+Starting branch: main
+Starting merge frontier: PR #94 merge commit 7d41ab94c6edeb8d16368f2f97e9896581518668
+
+MISSION
+
+Use the full useful ~30-minute window to advance the real Alpine `/sbin/apk --version` frontier from the Batch 32R merge while first repairing the two known review defects intentionally carried forward from PR #94.
+
+PR #94 was deliberately merged as a progress checkpoint because its core causal result is valuable: Linux/RV64 fstat(80) now crosses for the real Alpine loader and the unchanged apk retry advances to file-backed executable MAP_PRIVATE mmap(222). The remaining review findings are known debt, not accepted final semantics.
+
+This batch therefore has two opening correctness gates before new apk pressure:
+
+1. unify stat identity across `fstat(open(path))` and `newfstatat(path)`;
+2. repair the mmap rejection trace/diagnostic contract.
+
+After those are proven, immediately resume the unchanged real `/sbin/apk --version` command and continue through directly exposed causal blockers for as much of the implementation window as evidence allows.
+
+Do not treat the opening repairs as the whole batch if they are completed quickly. This is a time-and-evidence bounded snowball.
+
+KNOWN INHERITED REVIEW DEBT
+
+A. STAT IDENTITY MISMATCH
+
+PR #94 review found that the same namespace file can receive different inode identity through two Linux interfaces:
+
+- `fstat(open(path))` derives `st_ino` from the resolved object's canonical manifest offset;
+- `newfstatat(path)` currently derives `st_ino` from the later `"path"` token offset.
+
+This violates the expectation that the same resolved object reports one stable `(st_dev, st_ino)` identity across stat interfaces and can break applications that compare metadata to confirm file identity.
+
+Required repair:
+
+- establish one canonical bounded namespace object identity source;
+- use it for both `fstat` and `newfstatat` when they refer to the same resolved object;
+- include symlink-followed cases where both interfaces resolve to the same target;
+- preserve lstat-style no-follow identity for the symlink object itself when requested;
+- avoid path-, apk-, fd-, library-, or payload-specific cases;
+- keep metadata derived from the authoritative namespace rather than creating a second metadata truth;
+- add focused permanent regression coverage proving equality of `(st_dev, st_ino)` for the same object across open+fstat and newfstatat;
+- retain deterministic errno behavior and checked copyout.
+
+The review finding and attribution are recorded in:
+
+- `docs/research/AGENT_FRAMEWORK_FAILURE_LEDGER.md`
+- `docs/research/agent-framework-failure-ledger.jsonl`
+
+B. MMAP REJECTION TRACE / DIAGNOSTIC CONTRACT
+
+PR #94 emits `ZIGREF_LINUX_MMAP_REJECT` during live-console rejection pressure, but repository-authored diagnostics use the stable hyphenated `ZIGREF-*` namespace and are expected to be discoverable through the repository diagnostic index.
+
+Choose the smallest coherent repair:
+
+- either make the emitted marker a proper canonical authored diagnostic following repository conventions and index/repair guidance;
+- or make it clearly an ordinary trace marker that does not masquerade as a repository diagnostic.
+
+Do not create a large diagnostic subsystem change. Preserve the usefulness of the six mmap request arguments in causal QEMU traces.
+
+OPENING VALIDATION GATE
+
+Before implementing the next apk mechanism:
+
+- run the focused fstat/stat tests;
+- run the Morphic runtime recipe tests;
+- run formatting/check surfaces appropriate to touched files;
+- prove the new identity regression;
+- prove the trace/diagnostic convention is coherent and discoverable if a stable diagnostic is chosen.
+
+Then proceed immediately to real apk pressure.
+
+OBSERVED REAL APK FRONTIER
+
+Batch 32R proved:
+
+- `/sbin/apk` crosses exec;
+- the musl loader opens `/usr/lib/libcrypto.so.3` and `/usr/lib/libapk.so.2.14.9`;
+- fstat(80) is no longer the immediate ENOSYS barrier;
+- the first observed causal blocker is file-backed private executable mmap(222).
+
+Observed requests include:
+
+- libcrypto: address=0 length=0x3b6000 protection=0x5 flags=0x2 fd=3 offset=0
+- libapk:    address=0 length=0x02c000 protection=0x5 flags=0x2 fd=3 offset=0
+
+Interpretation:
+
+- `flags=0x2` = MAP_PRIVATE;
+- `protection=0x5` = PROT_READ | PROT_EXEC;
+- fd is an already-open namespace regular resource;
+- offset is zero in the observed opening requests.
+
+FILE-BACKED MMAP(222) IMPLEMENTATION REQUIREMENTS
+
+Implement the smallest bounded general mechanism justified by the observed requests.
+
+Required properties:
+
+1. Resolve the descriptor through the existing binding/resource ownership model.
+2. Accept only resource classes actually coherent for file-backed mapping.
+3. Validate page alignment and checked address/length/offset arithmetic.
+4. Validate requested file range against the authoritative resource bytes.
+5. Preserve MAP_PRIVATE semantics: mapped bytes are private to the process mapping and writes must not mutate the immutable namespace source.
+6. Preflight mapping-table capacity, address-space occupancy, page backing, and all other bounded resources before commitment where practical.
+7. Preserve PREPARE -> COMMIT discipline and rollback on partial failure.
+8. Preserve W+X=0. Do not create writable+executable mappings.
+9. Respect requested R/W/X permissions rather than mapping every file RWX or RW.
+10. Preserve SUM clear and existing trap/memory safety invariants.
+11. Do not mutate file offset as a side effect of mmap.
+12. Preserve descriptor/resource ownership and reference accounting.
+13. Zero-fill the tail of the final page beyond available mapped file bytes when required by the bounded mapping shape.
+14. Return deterministic Linux-compatible errno for invalid fd, unsupported mapping class, bad range/alignment, capacity exhaustion, and mapping failure.
+15. No special cases for apk, libcrypto, libapk, fd 3, or any named path.
+
+FOCUSED TESTS FOR FILE-BACKED MMAP
+
+Add permanent focused coverage for at least the evidence-backed core:
+
+- successful bounded MAP_PRIVATE file-backed mapping from an already-open regular resource;
+- exact copied bytes at the requested offset/range;
+- page tail behavior;
+- requested executable/read permissions with W+X=0;
+- invalid descriptor;
+- out-of-range file offset/length;
+- occupied destination or capacity rejection as appropriate to the existing API;
+- rollback/no resource leakage on a forced mid-commit failure if the current test surface supports it;
+- file position unchanged;
+- source namespace bytes unchanged after private mapping.
+
+Do not expand into a speculative complete mmap implementation.
+
+MANDATORY REAL-QEMU SNOWBALL LOOP
+
+After each causal repair, immediately rebuild the same canonical Alpine v3.22.0 RV64 artifact and rerun the unchanged command:
+
+`/sbin/apk --version`
+
+Use the same real system-QEMU path already documented by Batch 32R.
+
+Loop:
+
+observe real failure
+ -> classify
+ -> implement the smallest general repair
+ -> prove causality
+ -> retry the exact same artifact/command
+
+If file-backed mmap is repaired and apk advances, the new trace defines the next blocker.
+
+Do not guess that the next blocker is mprotect, libz resolution, signal handling, thread setup, or anything else merely because it appeared in earlier traces.
+
+Known downstream observations from Batch 32R include:
+
+- set_tid_address(96)
+- rt_sigaction(134)
+- rt_sigprocmask(135)
+- mprotect(226)
+- `libz.so.1` ENOENT
+
+These are hypotheses only until the unchanged retry proves one is the first causal blocker after mmap.
+
+If `libz.so.1` remains causal, prove whether the cause is the known intermediate-component symlink/path-resolution gap or an artifact/layout fact before changing resolver semantics.
+
+If `mprotect(226)` becomes causal, implement only the smallest general protection-transition semantics required by the observed loader request while preserving W+X=0 and mapping ownership.
+
+If `/sbin/apk --version` succeeds, continue immediately to:
+
+1. `/sbin/apk --help`
+2. `/sbin/apk info`
+
+Then pressure only the first directly observed blocker toward local package database reads.
+
+PLAYABLE ALPINE REGRESSION GATE
+
+Runtime changes must preserve the already-earned persistent-shell acceptance:
+
+- `echo morphic`
+- `echo second`
+- initial `pwd` => `/`
+- `ls /`
+- `cat /etc/alpine-release` => `3.22.0`
+- `cd /tmp`
+- `pwd` => `/tmp`
+- `echo hello > /tmp/hello`
+- `cat /tmp/hello` => `hello`
+- `echo hello | cat` => `hello`
+- `echo still-alive` => `still-alive`
+
+Re-prove this after runtime changes before the final handoff unless the implementation window leaves only enough time for persistence, in which case record the exact missing proof explicitly.
+
+INVARIANTS
+
+Preserve:
+
+- exact Alpine namespace/artifacts;
+- immutable source namespace plus bounded runtime writable overlay;
+- Linux policy at the compatibility edge;
+- PREPARE -> COMMIT;
+- mapping/table preflight;
+- W+X=0;
+- SUM clear;
+- process/FD/resource ownership;
+- parent shell liveness;
+- bounded resources;
+- deterministic errno and copyout behavior;
+- no guessing the next syscall;
+- no apk-specific compatibility hacks.
+
+TIME / PERSISTENCE CONTRACT
+
+Minute 0:
+- record visible clock;
+- confirm current main/head;
+- read PR #94 handoff/review debt and failure-ledger entry;
+- reproduce focused tests and the inherited real apk frontier.
+
+Approximately minute 0-24/25:
+- repair inherited stat identity and diagnostic contract;
+- validate them;
+- implement file-backed mmap if evidence remains the same;
+- repeatedly apply real-QEMU pressure and continue through newly exposed causal blockers while time/evidence allow.
+
+Approximately minute 26:
+- persisted handoff becomes primary;
+- ensure safe progress is committed;
+- write/update the Batch 32S report.
+
+Approximately minute 29:
+- persistence/final assembly only;
+- ensure the exact current frontier, validation state, and one next causal blocker are preserved.
+
+By approximately minute 30:
+- leave a complete persisted handoff.
+
+MANDATORY REPORT
+
+Create:
+
+`docs/reports/AGENTIC_SNOWBALL_BATCH_32S.md`
+
+The report must include:
+
+- starting commit and time;
+- exact inherited PR #94 defects;
+- exact stat-identity repair and regression proof;
+- exact trace/diagnostic repair;
+- exact file-backed mmap semantics implemented, if reached;
+- focused test commands/results;
+- exact canonical Alpine hashes/object counts if rebuilt;
+- exact QEMU commands and relevant output;
+- whether `/sbin/apk --version` succeeded;
+- whether `--help` or `info` were reached;
+- Playable Alpine regression result;
+- files changed;
+- final commit SHA;
+- exactly one next causal blocker if the apk ladder remains incomplete.
+
+SUCCESS ORDER
+
+Highest value outcomes, in order:
+
+A. inherited stat identity + diagnostic debt repaired and proven;
+B. real file-backed MAP_PRIVATE mmap works for the observed loader requests;
+C. unchanged `/sbin/apk --version` advances beyond mmap;
+D. `/sbin/apk --version` succeeds;
+E. `--help` succeeds;
+F. `apk info` begins real local package-database pressure;
+G. further evidence-backed progress within the useful implementation window.
+
+The mission is maximum causal progress with a trustworthy persisted frontier, not merely checking off one named syscall.

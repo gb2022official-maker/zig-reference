@@ -100,7 +100,8 @@
   ],
   "adapters_required": [
     "recipes/run-hosted-morphic-runtime/src/recipe.zig",
-    "recipes/run-hosted-morphic-runtime/src/freestanding_riscv64.zig"
+    "recipes/run-hosted-morphic-runtime/src/freestanding_riscv64.zig",
+    "recipes/run-hosted-morphic-runtime/src/linux_rv64_fstat.zig"
   ],
   "inherited_guarantees": [
     "Fixed resource derivation, stable runnable ordering, caller-controlled time, bounded trace storage, and explicit capacity failures.",

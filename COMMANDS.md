@@ -689,3 +689,18 @@ rebuilds the same canonical namespace-backed machine and re-proves both the
 focused pipeline/shell-survival pair and the complete one-shell acceptance
 sequence under QEMU 8.2.2 after making EOF and pipe retirement account for the
 suspended parent snapshot and dup3 target displacement.
+
+## Batch 32R real apk fstat frontier
+
+Batch 32R reused the documented Alpine namespace acquisition, namespace-backed
+freestanding build, and system-QEMU command surface. The focused Morphic recipe
+test now covers the Linux/RV64 fstat encoding and explicit copyout failure.
+The unchanged `/sbin/apk --version` retry crossed fstat(80) for the open
+libcrypto and libapk resources, then exposed file-backed private executable
+`mmap(222)` as the first causal blocker. No new runnable command was introduced.
+
+PR #94's focused validation repair adds permanent unbound-descriptor `EBADF`
+and ownership-conservation coverage for fstat, then regenerates all 60
+canonical unit/smoke evidence records after the root build wiring change. The
+runtime command surface and measured file-backed `mmap(222)` frontier remain
+unchanged.

@@ -21,6 +21,7 @@ const bounded_mapping_preflight = @import("bounded_mapping_preflight.zig");
 const linux_rv64_clone_request = @import("linux_rv64_clone_request.zig");
 const linux_rv64_fdupfd = @import("linux_rv64_fdupfd.zig");
 const linux_rv64_dup3 = @import("linux_rv64_dup3.zig");
+const linux_rv64_fstat = @import("linux_rv64_fstat.zig");
 const bounded_pipe = @import("bounded_pipe.zig");
 const linux_rv64_pipe2 = @import("linux_rv64_pipe2.zig");
 const linux_rv64_pipe_lifetime = @import("linux_rv64_pipe_lifetime.zig");
@@ -1519,7 +1520,7 @@ fn externalExecve(frame: *TrapFrame) usize {
     return 0;
 }
 
-const LinuxRequestKind = enum { get_current_directory, change_directory, duplicate, duplicate_to, fcntl, close, pipe2, open_at, get_directory_entries, read, write, write_vector, new_fstatat, program_break, clone, execve, memory_map, terminate, unsupported };
+const LinuxRequestKind = enum { get_current_directory, change_directory, duplicate, duplicate_to, fcntl, close, pipe2, open_at, get_directory_entries, read, write, write_vector, new_fstatat, fstat, program_break, clone, execve, memory_map, terminate, unsupported };
 fn decodeLinuxRequestKind(number: usize) LinuxRequestKind {
     return switch (number) {
         17 => .get_current_directory,
@@ -1535,6 +1536,7 @@ fn decodeLinuxRequestKind(number: usize) LinuxRequestKind {
         64 => .write,
         66 => .write_vector,
         79 => .new_fstatat,
+        80 => .fstat,
         214 => .program_break,
         220 => .clone,
         221 => .execve,
@@ -1544,7 +1546,7 @@ fn decodeLinuxRequestKind(number: usize) LinuxRequestKind {
     };
 }
 comptime {
-    if (decodeLinuxRequestKind(17) != .get_current_directory or decodeLinuxRequestKind(49) != .change_directory or decodeLinuxRequestKind(23) != .duplicate or decodeLinuxRequestKind(24) != .duplicate_to or decodeLinuxRequestKind(25) != .fcntl or decodeLinuxRequestKind(56) != .open_at or decodeLinuxRequestKind(57) != .close or decodeLinuxRequestKind(59) != .pipe2 or decodeLinuxRequestKind(61) != .get_directory_entries or decodeLinuxRequestKind(63) != .read or decodeLinuxRequestKind(64) != .write or decodeLinuxRequestKind(66) != .write_vector or decodeLinuxRequestKind(79) != .new_fstatat or decodeLinuxRequestKind(214) != .program_break or decodeLinuxRequestKind(220) != .clone or decodeLinuxRequestKind(221) != .execve or decodeLinuxRequestKind(222) != .memory_map or decodeLinuxRequestKind(93) != .terminate or decodeLinuxRequestKind(94) != .terminate or decodeLinuxRequestKind(0x7fff) != .unsupported) @compileError("Linux/RV64 decoder drift");
+    if (decodeLinuxRequestKind(17) != .get_current_directory or decodeLinuxRequestKind(49) != .change_directory or decodeLinuxRequestKind(23) != .duplicate or decodeLinuxRequestKind(24) != .duplicate_to or decodeLinuxRequestKind(25) != .fcntl or decodeLinuxRequestKind(56) != .open_at or decodeLinuxRequestKind(57) != .close or decodeLinuxRequestKind(59) != .pipe2 or decodeLinuxRequestKind(61) != .get_directory_entries or decodeLinuxRequestKind(63) != .read or decodeLinuxRequestKind(64) != .write or decodeLinuxRequestKind(66) != .write_vector or decodeLinuxRequestKind(79) != .new_fstatat or decodeLinuxRequestKind(80) != .fstat or decodeLinuxRequestKind(214) != .program_break or decodeLinuxRequestKind(220) != .clone or decodeLinuxRequestKind(221) != .execve or decodeLinuxRequestKind(222) != .memory_map or decodeLinuxRequestKind(93) != .terminate or decodeLinuxRequestKind(94) != .terminate or decodeLinuxRequestKind(0x7fff) != .unsupported) @compileError("Linux/RV64 decoder drift");
 }
 
 fn copyPipeDescriptors(destination: usize, descriptors: [2]usize) !void {
@@ -1795,6 +1797,27 @@ fn externalNamespaceStat(path_address: usize, destination: usize, flags: usize) 
     return negativeErrno(2);
 }
 
+fn externalResourceFstat(descriptor: usize, destination: usize) usize {
+    const description = linux_rv64_fstat.resolveDescription(&syscall_resources, &syscall_bindings, descriptor) catch |err| return negativeErrno(linux_rv64_fstat.linuxErrno(err));
+    const backend = @intFromEnum(description.backend);
+    if (backend != 0x100 and backend != 0x101) return negativeErrno(95);
+    const manifest_offset = description.state >> 32;
+    const manifest: []const u8 = &external_rv64_namespace_manifest;
+    if (manifest_offset >= manifest.len) return negativeErrno(5);
+    const row_end = std.mem.indexOfScalarPos(u8, manifest, manifest_offset, '}') orelse return negativeErrno(5);
+    const row = manifest[manifest_offset .. row_end + 1];
+    const kind = jsonStringAfter(row, 0, "\"kind\":\"") orelse return negativeErrno(5);
+    const is_directory = std.mem.eql(u8, kind, "directory");
+    if (is_directory != (backend == 0x100)) return negativeErrno(5);
+    const size = if (is_directory) 0 else jsonUnsignedAfter(row, 0, "\"data_length\":") orelse return negativeErrno(5);
+    linux_rv64_fstat.copyOut(.{
+        .inode = manifest_offset + 1,
+        .mode = if (is_directory) 0o040755 else 0o100755,
+        .size = size,
+    }, destination, copyBytesToUser) catch return negativeErrno(14);
+    return 0;
+}
+
 fn externalPageOccupied(_: void, page: usize) bool {
     const leaf = batch26_builder.query(page) catch return false;
     return leaf.raw_entry & 1 != 0 and leaf.raw_entry & 0xe != 0;
@@ -2009,6 +2032,10 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
             else
                 negativeErrno(9);
         },
+        .fstat => {
+            syscall_semantics[index] = 17;
+            frame.x[10] = externalResourceFstat(frame.x[10], frame.x[11]);
+        },
         .program_break => {
             syscall_semantics[index] = 7;
             const requested = frame.x[10];
@@ -2084,6 +2111,21 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
             // This observed minimum slice is an exact, page-aligned, no-access
             // anonymous reservation. Linux values and errno remain here.
             if (descriptor != std.math.maxInt(usize) or offset != 0 or length == 0) {
+                if (external_artifact_options.live_console_input) {
+                    write("ZIGREF_LINUX_MMAP_REJECT address=");
+                    writeUsizeHex(address);
+                    write(" length=");
+                    writeUsizeHex(length);
+                    write(" protection=");
+                    writeUsizeHex(protection);
+                    write(" flags=");
+                    writeUsizeHex(flags);
+                    write(" fd=");
+                    writeUsizeHex(descriptor);
+                    write(" offset=");
+                    writeUsizeHex(offset);
+                    write("\n");
+                }
                 frame.x[10] = negativeErrno(22);
             } else if (protection == 0 and flags == 0x32) {
                 external_runtime_mappings.reserve(address, length, .{}, true, {}, externalPageOccupied) catch {
@@ -2146,6 +2188,21 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                     break;
                 } else frame.x[10] = negativeErrno(12);
             } else {
+                if (external_artifact_options.live_console_input) {
+                    write("ZIGREF_LINUX_MMAP_REJECT address=");
+                    writeUsizeHex(address);
+                    write(" length=");
+                    writeUsizeHex(length);
+                    write(" protection=");
+                    writeUsizeHex(protection);
+                    write(" flags=");
+                    writeUsizeHex(flags);
+                    write(" fd=");
+                    writeUsizeHex(descriptor);
+                    write(" offset=");
+                    writeUsizeHex(offset);
+                    write("\n");
+                }
                 frame.x[10] = negativeErrno(22);
             }
         },

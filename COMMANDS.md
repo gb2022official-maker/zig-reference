@@ -719,3 +719,12 @@ evidence records after the root build wiring change, added runtime-level mmap
 ownership/collision/capacity/rollback regressions, and re-proved the complete
 Playable Alpine persistent-shell gate under real QEMU. The 320-page capacity
 and measured 950-page libcrypto request remain unchanged for the next batch.
+
+Batch 32T re-ran `zig build test-recipe-run-hosted-morphic-runtime` after the
+file-backed mmap EOF/protection regressions and it passed under Zig 0.14.0. The
+canonical namespace-backed freestanding install command also passed after the
+private file-mapping pool was separated and caller-artifact transport moved to
+its non-overlapping linker reservation. Real-QEMU pressure could not be rerun in
+this environment because `qemu-system-riscv64` is unavailable; this is not apk
+success evidence and the unchanged `/sbin/apk --version` retry remains required.
+No new runnable command was introduced.

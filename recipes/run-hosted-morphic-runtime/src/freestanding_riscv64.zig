@@ -123,9 +123,14 @@ const prepared_table_pages = 16;
 // loader and therefore needs bounded post-image brk/mmap headroom rather than
 // inheriting the original shell's already-established allocator state.
 const prepared_image_pages = 320;
+// Private file mappings use a distinct monotonic bounded pool so a large
+// shared object cannot consume exec/brk backing. The linker keeps both pools
+// in the prepared reservation below caller-artifact transport.
+const private_file_mapping_pages = 1024;
 const external_stack_pages = 2;
 var prepared_table_backing: [prepared_table_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
 var external_prepared_backing: [prepared_image_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
+var external_private_file_backing: [private_file_mapping_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
 var external_interpreter_backing: [prepared_image_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
 var external_prepared_stack: [external_stack_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
 // execve PREPARE must not overwrite the live child image. These caller-owned
@@ -265,6 +270,7 @@ const external_stack_plan_capacity = external_stack_pages * frames.PageSize;
 var external_stack_image: initial_stack.StackPlan(external_stack_plan_capacity) = undefined;
 var external_program_break: usize = 0;
 var external_next_backing: usize = 0;
+var external_next_private_file_backing: usize = 0;
 const ExternalRuntimeMappings = runtime_mappings.BoundedRuntimeMappings(8, frames.PageSize);
 var external_runtime_mappings: ExternalRuntimeMappings = .{};
 export var external_entry: usize = 0;
@@ -1144,6 +1150,7 @@ fn executeExternalArtifact(builder: *MachineBuilder, trap_end: usize, historical
     external_program_break = (external_program_break + frames.PageSize - 1) & ~@as(usize, frames.PageSize - 1);
     external_next_backing = prepared.items().len;
     external_runtime_mappings = .{};
+    external_next_private_file_backing = 0;
     write("ZIGREF_BATCH29_PHASE commit\n");
     for (&external_prepared_stack) |*backing| @memset(backing, 0);
     const stack_offset = external_stack_image.initial_sp.raw() - external_stack_base;
@@ -1825,14 +1832,14 @@ const ExternalFileMmapContext = struct {
 
     pub fn prepare(self: *@This(), plan: linux_rv64_file_mmap.Plan) !void {
         const page_count = plan.mapped_length / frames.PageSize;
-        for (external_prepared_backing[self.backing_start .. self.backing_start + page_count]) |*page| @memset(page, 0);
+        for (external_private_file_backing[self.backing_start .. self.backing_start + page_count]) |*page| @memset(page, 0);
         const bytes = self.source[plan.file_offset..][0..plan.byte_length];
         for (bytes, 0..) |byte, byte_index|
-            external_prepared_backing[self.backing_start + byte_index / frames.PageSize][byte_index % frames.PageSize] = byte;
+            external_private_file_backing[self.backing_start + byte_index / frames.PageSize][byte_index % frames.PageSize] = byte;
     }
 
     pub fn mapPage(self: *@This(), virtual: usize, page_index: usize, permissions: linux_rv64_file_mmap.Permissions) !void {
-        const physical = @intFromPtr(&external_prepared_backing[self.backing_start + page_index]);
+        const physical = @intFromPtr(&external_private_file_backing[self.backing_start + page_index]);
         _ = try batch26_builder.mapPage(virtual, physical, .page_4k, .{
             .read = permissions.read,
             .write = permissions.write,
@@ -1867,14 +1874,14 @@ fn externalFileMmap(length: usize, protection: usize, flags: usize, descriptor: 
         error.AddressOverflow => 12,
     });
     const page_count = plan.mapped_length / frames.PageSize;
-    const backing_end = std.math.add(usize, external_next_backing, page_count) catch return negativeErrno(12);
-    if (backing_end > prepared_image_pages) return negativeErrno(12);
+    const backing_end = std.math.add(usize, external_next_private_file_backing, page_count) catch return negativeErrno(12);
+    if (backing_end > private_file_mapping_pages) return negativeErrno(12);
 
     var candidate = external_program_break;
     while (candidate < user_stack_va) : (candidate += frames.PageSize) {
         var context = ExternalFileMmapContext{
             .source = external_rv64_namespace_data[data_offset .. data_offset + data_length],
-            .backing_start = external_next_backing,
+            .backing_start = external_next_private_file_backing,
         };
         linux_rv64_file_mmap.mapPrivate(plan, candidate, &external_runtime_mappings, &context, ExternalFileMmapContext.occupied) catch |err| switch (err) {
             error.Collision => continue,
@@ -1885,7 +1892,7 @@ fn externalFileMmap(length: usize, protection: usize, flags: usize, descriptor: 
                 return negativeErrno(12);
             },
         };
-        external_next_backing = backing_end;
+        external_next_private_file_backing = backing_end;
         asm volatile ("sfence.vma" ::: "memory");
         return candidate;
     }

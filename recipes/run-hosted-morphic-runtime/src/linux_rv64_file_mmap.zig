@@ -34,10 +34,16 @@ pub fn plan(file_size: usize, length: usize, protection: usize, flags: usize, of
     if (length == 0 or page_size == 0 or page_size & (page_size - 1) != 0 or offset & (page_size - 1) != 0 or flags != 0x2 or protection & ~@as(usize, 0x7) != 0)
         return error.InvalidArgument;
     const permissions: Permissions = .{ .read = protection & 1 != 0, .write = protection & 2 != 0, .execute = protection & 4 != 0 };
+    // Sv39 has no valid write-only leaf encoding, and this bounded mapping
+    // path does not yet model an inaccessible reservation for PROT_NONE.
+    if (!permissions.read and !permissions.execute) return error.InvalidArgument;
     if (permissions.write and permissions.execute) return error.PermissionDenied;
     if (offset > file_size) return error.FileRange;
     const rounded = std.math.add(usize, length, page_size - 1) catch return error.AddressOverflow;
     const mapped_length = rounded & ~(page_size - 1);
+    const available = file_size - offset;
+    const available_rounded = std.math.add(usize, available, page_size - 1) catch return error.AddressOverflow;
+    if (mapped_length > available_rounded & ~(page_size - 1)) return error.FileRange;
     return .{ .file_offset = offset, .byte_length = @min(length, file_size - offset), .mapped_length = mapped_length, .page_size = page_size, .permissions = permissions };
 }
 
@@ -81,10 +87,25 @@ test "private executable mapping copies exact range and clears page tail" {
 test "invalid class range alignment and W plus X fail closed" {
     try std.testing.expectError(error.InvalidArgument, plan(16, 4, 1, 1, 0, 4));
     try std.testing.expectError(error.InvalidArgument, plan(16, 4, 1, 2, 1, 4));
-    const tail = try plan(16, 8, 1, 2, 12, 4);
+    const tail = try plan(16, 4, 1, 2, 12, 4);
     try std.testing.expectEqual(@as(usize, 4), tail.byte_length);
+    try std.testing.expectError(error.FileRange, plan(16, 9, 1, 2, 12, 4));
     try std.testing.expectError(error.FileRange, plan(16, 4, 1, 2, 20, 4));
+    try std.testing.expectError(error.InvalidArgument, plan(16, 4, 0, 2, 0, 4));
+    try std.testing.expectError(error.InvalidArgument, plan(16, 4, 2, 2, 0, 4));
     try std.testing.expectError(error.PermissionDenied, plan(16, 4, 7, 2, 0, 4));
+}
+
+test "only the final partial file page may be zero filled" {
+    const source = "012345";
+    const final_page = try plan(source.len, 4, 1, 2, 4, 4);
+    var private: [4]u8 = undefined;
+    final_page.prepare(source, &private);
+    try std.testing.expectEqualSlices(u8, &.{ '4', '5', 0, 0 }, &private);
+
+    // A request extending into the next complete page is rejected by planning,
+    // before reserve/prepare/map can mutate the address space.
+    try std.testing.expectError(error.FileRange, plan(source.len, 5, 1, 2, 4, 4));
 }
 
 test "descriptor resolution preserves position and resource ownership" {

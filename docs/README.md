@@ -24,6 +24,13 @@ This directory contains the long-form project record. The repository root is int
 
 `research/` contains durable research proposals, experimental frameworks, and research-program definitions. Research documents may motivate future work, but they are not evidence that the proposed capabilities already exist.
 
+## Benchmarks
+
+- [`benchmarks/MORPHIC_LINUX_COMPATIBILITY_DENSITY_SCORECARD.md`](benchmarks/MORPHIC_LINUX_COMPATIBILITY_DENSITY_SCORECARD.md) — two-leaderboard comparison framework separating ordinary Linux-compatible system maturity from Morphic's compatibility-per-mechanism mission; includes a provisional 2026-08-15 placement and the measurements needed to replace estimates with reproducible scores.
+- [`benchmarks/AGENTIC_COMPARATIVE_BENCHMARK_PROGRAM.md`](benchmarks/AGENTIC_COMPARATIVE_BENCHMARK_PROGRAM.md) — adversarial comparative benchmark specification for testing Alpz, Linux, Linux-plus-agent tooling, and Rust without constructing a benchmark that merely rewards the project by design.
+
+`benchmarks/` contains comparative scoring frameworks and benchmark programs. Provisional scorecards are analytical snapshots, not evidence of benchmark victory; measured results must remain traceable to their underlying acceptance proofs and raw measurements.
+
 ## Applications
 
 - [`applications/QUIRKM_CONTEXT_COMPLETE_BIOLOGICAL_ORGAN_CONTROL.md`](applications/QUIRKM_CONTEXT_COMPLETE_BIOLOGICAL_ORGAN_CONTROL.md) — application hypothesis for a context-complete QuirkM control/diagnostic substrate for future artificial or biohybrid organs, including a real-world-grounded ventricular-assist-pump scenario and explicit safety/nonclaim boundaries.

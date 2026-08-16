@@ -1,0 +1,287 @@
+CODEX AGENTIC SNOWBALL — BATCH 32U
+FORK/PRIVATE-MMAP RESTORE -> REAL APK -> MAXIMUM CAUSAL PROGRESS
+FULL ~30-MINUTE WORKING SLICE BEFORE FINAL HANDOFF
+
+Repository: thanks-cohn/zig-reference
+Starting branch: main
+Historical progress checkpoint: PR #97 merged at cf87c3b8b5b8b32609cea2d30636aad69a9aacfb
+Known review defect: PR #97 inline review comment 3790537879 / review 4944974587
+Failure-ledger record: docs/research/AGENT_FRAMEWORK_FAILURE_LEDGER.md and docs/research/agent-framework-failure-ledger.jsonl
+
+MISSION
+
+Use the full useful ~30-minute working slice.
+
+First repair the known P1 process-state defect intentionally carried across the PR #97 checkpoint: file-backed private mappings now use a distinct backing pool, but the supported fork-shaped clone parent snapshot/restore contract does not preserve that backing class and cursor correctly across child exec/exit.
+
+That repair is only the opening gate.
+
+As soon as the fork/private-mmap lifetime invariant is repaired and proven, immediately rebuild the canonical Alpine machine and resume unchanged real:
+
+/sbin/apk --version
+
+From that point, repeatedly observe the first real failure, classify it, implement the smallest general repair, prove it, and rerun the unchanged apk command immediately. Continue this causal loop for the full useful working slice.
+
+Do not make the opening defect the endpoint. Do not make the first apk repair the endpoint. Do not enter handoff mode early.
+
+KNOWN CHECKPOINT
+
+PR #97 preserved substantial real progress:
+
+- corrected file-backed EOF reservation semantics distinguish mapped_length from accessible_length;
+- only the legitimate final partial file page receives zero-tail readable backing;
+- bounded file-backed MAP_PRIVATE exists;
+- loader-observed MAP_PRIVATE|MAP_FIXED replacement is admitted for runtime-owned ranges;
+- Linux/RV64 munmap(215) is admitted for runtime-owned mappings with bounded range release/splitting;
+- private file backing is separate from image/brk backing;
+- runtime mapping-table capacity rose from 8 to 16;
+- private-file backing capacity rose to 2,048 pages;
+- real QEMU crossed the previous fixed-map and munmap blockers;
+- the latest unchanged /sbin/apk --version reaches a deterministic first libcrypto ENOMEM;
+- relative libz.so.1 still reports ENOENT downstream;
+- full Playable Alpine persistent-shell behavior was re-proved.
+
+PR #97 was intentionally merged at cf87c3b8b5b8b32609cea2d30636aad69a9aacfb despite one known P1 correctness defect so useful causal progress was not discarded. This plan owns that defect first.
+
+OPENING DEFECT — PRIVATE FILE BACKING ACROSS FORK/CHILD EXEC/PARENT RESTORE
+
+Current file-backed mappings use external_private_file_backing and external_next_private_file_backing.
+
+The existing fork-shaped clone path snapshots parent process state but was designed before this second backing class existed. Review found that parent restoration can therefore rebuild runtime mappings using the old prepared backing class or bytes after a child exec has reset/reused the private-file pool.
+
+This can leave a dynamically linked parent with apparently valid mapping topology but corrupted shared-library bytes after child execution.
+
+OPENING REPAIR REQUIREMENTS
+
+1. Trace the existing clone snapshot, child execution, termination, and parent restoration path completely before editing.
+2. Represent enough backing identity to distinguish at least:
+   - ordinary prepared/image runtime backing;
+   - private file-mapping backing.
+3. Preserve the parent's private-file backing bytes and allocation cursor across the supported fork-shaped clone lifecycle.
+4. Child exec/reset must not destroy the state required to restore the parent.
+5. Parent restoration must map each runtime-owned mapping from its original backing class rather than assuming one backing array.
+6. Preserve existing process/descriptor/pipe/cwd snapshots and ownership behavior.
+7. Preserve PREPARE -> COMMIT, rollback/failure atomicity, W+X=0, SUM clear, bounded resources, and parent-shell liveness.
+8. No apk/libcrypto/path/fd special cases.
+
+PERMANENT PROOF
+
+Add the smallest focused permanent regression that proves the process-state contract rather than only helper behavior.
+
+At minimum prove the equivalent of:
+
+- parent owns a file-backed private mapping with known bytes;
+- fork-shaped clone snapshots parent state;
+- child execution mutates/resets/reuses its own runtime/private backing state;
+- child exits/restores parent;
+- parent mapping topology is restored;
+- parent mapping points to the correct private backing class;
+- parent bytes are identical to the pre-fork bytes;
+- private backing cursor/state is restored coherently;
+- unrelated resource/binding ownership remains conserved.
+
+If direct end-to-end helper testing is architecturally awkward, extract the smallest neutral snapshot/restore helper needed to make this invariant directly testable. Do not create a broad new process abstraction merely to satisfy the test.
+
+IMMEDIATE REAL APK PRESSURE
+
+As soon as the opening repair and focused proof pass, immediately rebuild the canonical namespace-backed Morphic machine and run the unchanged real command under QEMU:
+
+/sbin/apk --version
+
+Do not spend the rest of the slice polishing the opening repair once it is proven.
+
+CURRENT REAL APK FRONTIER
+
+The latest Batch 32T QEMU trace crossed:
+
+1. loader whole-range reservation / EOF semantics;
+2. exact MAP_PRIVATE|MAP_FIXED file replacement;
+3. munmap(215);
+4. repeated shared-object loading into libssl/libcrypto territory.
+
+The latest first visible fatal condition is a deterministic libcrypto ENOMEM.
+
+The persisted report explicitly says the trace does not yet identify which bounded subresource causes that first ENOMEM.
+
+Therefore do NOT guess that the answer is simply another capacity increase.
+
+FIRST APK DIAGNOSTIC STEP
+
+Add only enough bounded, stage-specific failure identity to determine which checked stage/resource returns ENOMEM in the first libcrypto file-mapping transaction.
+
+Examples of acceptable stage identity include, only where actually relevant to the current path:
+
+- mapping-table reservation/capacity;
+- private-file backing capacity/cursor;
+- virtual-address candidate search/collision;
+- page-table mapping/table allocation;
+- fixed replacement containment/preparation;
+- another already-existing bounded resource.
+
+Keep this identity compact and consistent with repository trace/diagnostic conventions. Do not create a permanent noisy diagnostic subsystem unless evidence requires it.
+
+Once the exact ENOMEM source is known:
+
+- implement the smallest general bounded repair;
+- add focused proof of the repaired invariant;
+- immediately rerun unchanged /sbin/apk --version.
+
+CONTINUE THE SNOWBALL
+
+After EVERY successful repair during this slice:
+
+observe exact real failure
+ -> classify
+ -> implement smallest general mechanism
+ -> focused proof
+ -> rebuild
+ -> rerun unchanged /sbin/apk --version immediately
+
+Repeat for the remainder of the useful ~30-minute working slice.
+
+The fact that one blocker is solved is NEVER a reason to prepare the handoff while useful time remains.
+
+Do not guess the next syscall or subsystem.
+
+If the relative libz.so.1 ENOENT becomes the first causal failure, prove whether the historical component-wise symlink gap is responsible before changing resolution. If causal, admit only the smallest bounded component-wise symlink semantics with traversal/loop bounds and immutable namespace behavior, then retry apk immediately.
+
+If mprotect(226), set_tid_address(96), rt_sigaction(134), rt_sigprocmask(135), or another syscall becomes first causal, follow the exact observed trace rather than launching a broad syscall campaign.
+
+If another mapping semantic becomes causal, repair only the exact general Linux-visible behavior required by the observed loader transaction.
+
+APK SUCCESS LADDER
+
+If:
+
+/sbin/apk --version
+
+succeeds, immediately run:
+
+/sbin/apk --help
+
+Then:
+
+apk info
+
+If those succeed and useful working time remains, continue directly into the next real local package-database behavior exposed by apk. Do not declare victory after merely printing the version string.
+
+QEMU / HOST INFRASTRUCTURE RULE
+
+qemu-system-riscv64 is mandatory pressure infrastructure for this batch.
+
+At minute 0 verify:
+
+zig version
+command -v qemu-system-riscv64
+qemu-system-riscv64 --version
+
+If QEMU or another required host pressure tool is unexpectedly unavailable, that is NOT automatic permission for an early handoff.
+
+Spend the useful working window performing bounded restoration of the exact missing infrastructure surface: inspect PATH/package state, complete an interrupted package configuration, use the repository's documented tooling, or install the required package if the environment permits it.
+
+Return to real QEMU pressure as soon as the host capability is restored.
+
+Do not substitute speculative Morphic changes for unavailable real pressure.
+
+PLAYABLE ALPINE SAFETY GATE
+
+After runtime changes that touch process/mapping/ownership behavior, re-prove the canonical persistent shell before final persistence:
+
+echo morphic
+echo second
+pwd
+ls /
+cat /etc/alpine-release
+cd /tmp
+pwd
+echo hello > /tmp/hello
+cat /tmp/hello
+echo hello | cat
+echo still-alive
+
+Expected:
+
+morphic
+second
+/
+real Alpine root entries
+3.22.0
+/tmp
+hello
+hello
+still-alive
+
+TIME DISCIPLINE — HARD REQUIREMENT
+
+Minute 0:
+- record visible start time;
+- verify current main contains merge checkpoint cf87c3b8b5b8b32609cea2d30636aad69a9aacfb;
+- verify Zig and QEMU;
+- inspect/reproduce the fork/private-backing defect and current apk frontier as appropriate.
+
+Useful working interval, approximately minute 0 through minute 30:
+- opening fork/private-backing repair;
+- focused proof;
+- immediate real apk retry;
+- causal repair;
+- immediate real apk retry;
+- repeat as evidence permits.
+
+Do NOT switch into report-writing/handoff mode merely because the opening defect is solved, one apk blocker is solved, or the first new blocker is identified.
+
+Keep implementation + real QEMU pressure primary until approximately the 30-minute boundary.
+
+Only at the ~30-minute boundary make persistence/handoff the final action.
+
+If exact wall-clock execution forces a small overlap for commit/report persistence, minimize it; the purpose of the rule is to prevent a 5-10 minute engineering run from being prematurely converted into a documentation run.
+
+REQUIRED REPORT
+
+Create or update:
+
+docs/reports/AGENTIC_SNOWBALL_BATCH_32U.md
+
+The report must include:
+
+- visible start/end time or elapsed working interval;
+- starting historical checkpoint cf87c3b8b5b8b32609cea2d30636aad69a9aacfb;
+- PR #97 review comment 3790537879 as inherited defect evidence;
+- exact fork/private-backing repair and permanent proof;
+- every unchanged /sbin/apk --version retry performed after that repair;
+- exact first libcrypto ENOMEM stage/resource identity once determined;
+- every additional causal mechanism admitted and why;
+- whether /sbin/apk --version succeeded;
+- whether --help and apk info were reached;
+- Playable Alpine result;
+- exact commands/tests run;
+- changed files;
+- final commit SHA;
+- exactly one next causal blocker if incomplete.
+
+NON-GOALS
+
+Do not:
+- special-case apk, libcrypto, libssl, libapk, libz, fd numbers, or paths;
+- merely increase arbitrary capacity before identifying the current ENOMEM source;
+- launch a broad fork, mmap, signal, symlink, or syscall rewrite without direct evidence;
+- chase relocation symbols while required dependency loading remains incomplete;
+- treat documentation as the primary activity before the useful working interval is exhausted;
+- perform the final handoff substantially before the ~30-minute boundary.
+
+SUCCESS CONDITION
+
+Preferred:
+
+1. fork/private-file-backed parent restoration is correct and permanently proven;
+2. /sbin/apk --version succeeds;
+3. --help and apk info are pressured immediately afterward;
+4. further local apk behavior is advanced while useful time remains.
+
+If apk does not yet succeed, success still requires:
+
+- the inherited PR #97 process-state defect repaired;
+- real QEMU used after the repair;
+- the libcrypto ENOMEM source identified rather than guessed;
+- maximum evidence-backed causal progress through repeated unchanged apk retries for the full useful ~30-minute slice;
+- Playable Alpine preserved;
+- exactly one evidence-backed next blocker persisted only at the end.

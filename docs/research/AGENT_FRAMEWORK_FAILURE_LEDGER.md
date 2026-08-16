@@ -76,7 +76,7 @@ Do not collapse all failures into one number. The point is to learn whether the 
 
 **Observed result:** the recovery was regenerated and committed locally as `471d280403b0a87effaf8dfb2d015c28ed1c38e8`. The checkout had no configured `origin`, so push and remote-head verification failed. Node.js was absent, preventing the Node-backed portion of `zig build check`; neither `qemu-system-riscv64` nor `qemu-riscv64` was installed, so the exact runtime retries could not execute. Local commits and the worktree survived.
 
-**Attribution:** **platform/tooling failure** (high confidence). The plan was actionable, and the agent performed the available persistence and focused implementation work; externally required Git and machine-emulation surfaces were absent.
+**Attribution:** **platform/tooling failure** (high confidence). The plan was actionable, and the agent performed the available persistence and focused implementation work; externally required Git, Node.js, and emulator surfaces were absent.
 
 **Corrective action:** supply the repository remote, Node.js, and both RISC-V QEMU executables; rerun the aggregate gate, push the preserved commits, verify the remote SHA, open the draft PR, and immediately execute the exact echo then shell ladder.
 
@@ -140,7 +140,7 @@ Do not collapse all failures into one number. The point is to learn whether the 
 
 **Confidence:** high.
 
-**Why:** the Batch 32S plan explicitly required validation of file ranges, requested permissions, deterministic errno, bounded failure atomicity, and Linux-compatible private mapping behavior. No external platform limitation forced the planner to map whole pages beyond EOF or admit protection shapes that the downstream Sv39 implementation cannot encode. Review found both directly in the persisted implementation.
+**Why:** the Batch 32S plan explicitly required validation of file ranges, requested permissions, deterministic errno, bounded failure atomicity, and Linux-compatible private mappings. No external platform limitation forced the planner to map whole pages beyond EOF or admit protection shapes that the downstream Sv39 implementation cannot encode. Review found both directly in the persisted implementation.
 
 **Checkpoint decision:** do **not** merge the Batch 32S file-mmap PR until both semantic defects are repaired with focused permanent regressions and the full validation workflow remains green. Keep the measured 950-page libcrypto private-backing capacity requirement as the next causal apk frontier; do not mix that capacity expansion into this correctness cleanup.
 
@@ -171,3 +171,29 @@ Do not collapse all failures into one number. The point is to learn whether the 
 **Checkpoint decision:** intentionally merge PR #97 as an annotated causal-progress checkpoint at `cf87c3b8b5b8b32609cea2d30636aad69a9aacfb`, then hand the known ownership defect to the next fresh Codex run. The next run must repair and prove backing-class-aware snapshot/restore first, then immediately resume real `/sbin/apk --version` pressure instead of treating the cleanup as the endpoint.
 
 **Corrective action:** represent enough backing identity in runtime mappings or process snapshots to distinguish prepared-image backing from private-file backing; snapshot and restore the private pool plus cursor across fork-shaped clone; add a focused regression where a parent with file-backed private mappings forks, the child execs/exits, and the parent resumes with byte-identical mappings; re-prove Playable Alpine; then rerun unchanged `/sbin/apk --version` and continue causal repairs through the full useful ~30-minute slice before final handoff.
+
+## Entry 2026-08-15 — Batch 32U PR #98 merged with stale validation-evidence digest
+
+**Request / plan:** Batch 32U, `docs/plans/CODEX_AGENTIC_SNOWBALL_BATCH_32U_FORK_PRIVATE_MMAP_RESTORE_TO_APK_MAXIMUM_CAUSAL_PROGRESS_FULL_30MIN_BEFORE_HANDOFF.txt`, repaired the inherited fork/private-file mapping restore defect and then continued real QEMU apk pressure. A follow-up repaired two P1 review findings around PROT_NONE `mprotect` transitions and fixed-anonymous replacement failure atomicity.
+
+**Pull request:** PR #98, `Fix fork-shaped private-file mmap restore; record backing classes and advance apk runtime progress`.
+
+**PR head carrying the validation debt:** `08ed237f00923bb915babe0d48ff310e3a16ac5c`.
+
+**Intentional merge checkpoint:** PR #98 was merged at `2bbe272e4b3b3ded824bd3d3a64b60be0f267b1f`. The merge commit message explicitly states that this is a progress checkpoint and that the remaining validation-evidence regeneration is handed to the next Codex run. This merge is not a claim that CI was green.
+
+**GitHub Actions evidence:** workflow run `31926416535`, job `95114607166` (`contracts-and-zig`), completed with failure. The failing step was `zig build check`. The concrete error was `validation evidence error: fixed-capacity-vector: stale source digest; regenerate validation evidence`, emitted by `python3 tools/python-environment.py tools/record-validation.py --check`. The same job reported `71/74 steps succeeded`, `30/30 tests passed`, canonical formatting passed, 60 contracts validated, dependency graphs/indexes passed, and repository policy passed.
+
+**Useful progress preserved by the checkpoint:** the Batch 32U report records that real `/sbin/apk --version` succeeded with `apk-tools 2.14.9, compiled for riscv64`, `/sbin/apk --help` reached real apk output, `apk info` progressed through dependency loading and RELRO to a deterministic musl `memset` store fault at destination `0x8`, the inherited fork/private-mmap restore defect was repaired, both P1 review findings were repaired with focused tests, and the canonical Playable Alpine persistent-shell gate was re-proved.
+
+**Observed failure:** repository-owned generated validation evidence was not regenerated/persisted after source/build wiring changed, so the PR head failed the canonical `zig build check` evidence-digest gate even though runtime tests and the real-QEMU pressure evidence were useful.
+
+**Attribution:** **agent execution failure**.
+
+**Confidence:** high.
+
+**Why:** stale validation evidence is a deterministic repository-owned derived-artifact obligation. The run had a viable local path to regenerate it and no external platform/tool failure prevented that operation. The follow-up also reported local validation success, but the externally authoritative PR workflow disproved completeness. This is therefore a persistence/completeness failure, not a framework or platform failure.
+
+**Checkpoint decision:** intentionally merge PR #98 at `2bbe272e4b3b3ded824bd3d3a64b60be0f267b1f` to preserve the major apk-version milestone and the substantial runtime repairs. The next run must first regenerate and verify canonical validation evidence from current main, get `zig build check` green, and then immediately resume the unchanged real `apk info` frontier rather than spending an entire batch on validation cleanup.
+
+**Corrective action:** regenerate canonical validation evidence using the repository's established tooling; run `zig build check`, repository validation, command-reference checks, and formatting from current main; persist all required generated/evidence changes; then immediately rebuild the real Alpine machine and continue causal `apk info` repair/retry pressure through the full useful ~30-minute window before final handoff.

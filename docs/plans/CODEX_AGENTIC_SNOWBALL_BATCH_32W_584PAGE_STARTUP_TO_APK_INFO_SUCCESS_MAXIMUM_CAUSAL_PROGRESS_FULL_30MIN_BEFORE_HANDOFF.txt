@@ -1,0 +1,295 @@
+CODEX AGENTIC SNOWBALL — BATCH 32W
+584-PAGE STARTUP FRONTIER -> APK INFO SUCCESS -> STRONGER LOCAL APK PRESSURE
+MAXIMUM CAUSAL PROGRESS FOR THE FULL USEFUL ~30-MINUTE WINDOW BEFORE FINAL HANDOFF
+
+Repository: thanks-cohn/zig-reference
+Start from current main.
+Inherited checkpoint: PR #99 merged at efd18a039ce784d837bba03770d8e22e13e74a6b.
+
+MISSION
+
+This is an implementation + real-QEMU pressure run, not a diagnosis-only run and not a one-bug batch.
+
+Primary target:
+
+    make real unchanged Alpine v3.22.0 RV64 `apk info` complete successfully if causally achievable
+
+If `apk info` succeeds before the useful ~30-minute boundary, immediately continue into stronger real local apk/package-database behavior and keep advancing for the remaining useful time.
+
+Final report/handoff persistence belongs at approximately the 30-minute boundary.
+
+
+INHERITED EVIDENCE — DO NOT REDISCOVER FROM SCRATCH
+
+Batch 32V / PR #99 established:
+
+- real `/sbin/apk --version` prints `apk-tools 2.14.9, compiled for riscv64`;
+- real `/sbin/apk --help` reaches apk output;
+- fresh unchanged `apk info` reproduced the old musl `memset` fault around PC `0x4004df9a`, destination `0x8`, with `a2=0x27100` and return address around `0x3e9d72`;
+- tracing identified anonymous mmap failure as the first bad producer rather than `memset` itself;
+- Linux mmap byte lengths now round safely to every touched page;
+- the historical `0x2711c` anonymous allocation now succeeds;
+- address-zero anonymous `PROT_NONE` reservations now have bounded unbacked virtual ownership semantics;
+- the runtime mapping table grew from the measured 32-entry boundary to a bounded 64-entry table, with focused proof beyond entry 32;
+- the workload then advanced to a `memset` length `0x186a00` whose anonymous mmap needs 391 pages while the backing cursor is already at 191 pages;
+- the prepared/brk/anonymous backing class is now 584 pages: 582 pages of measured demand plus two pages of headroom;
+- exec/fork state transfer now copies live prefixes rather than entire large backing arrays;
+- focused recipe tests passed;
+- local `zig build check` passed;
+- canonical repository validation passed 350/350 steps and 249/249 tests;
+- PR #99 GitHub validation was green before merge.
+
+However, the final enlarged 584-page machine compiled but did not reach external execution / external PREPARE->COMMIT inside the final bounded QEMU retry.
+
+Therefore `apk info` completion is not yet earned.
+
+Exact inherited causal frontier:
+
+    determine why the 584-page machine does not reach external PREPARE/COMMIT promptly,
+    remove the first measured general cause,
+    then rerun unchanged `apk info` and verify the admitted 391-page allocation.
+
+
+TIME CONTRACT
+
+Use the full useful approximately 30-minute engineering slice.
+
+Implementation, focused proof, rebuild, and real QEMU workload pressure remain primary until the time boundary.
+
+Do not treat any of the following as the batch boundary:
+
+- making the 584-page machine boot promptly;
+- reaching external PREPARE;
+- reaching external COMMIT;
+- re-proving `/sbin/apk --version`;
+- re-proving `/sbin/apk --help`;
+- proving the 391-page allocation succeeds;
+- repairing one new apk blocker;
+- making `apk info` succeed.
+
+When any one of those is achieved early, immediately continue into the next real workload-exposed blocker or stronger local apk behavior.
+
+At approximately the 30-minute boundary, make report/handoff persistence the final activity.
+
+If a required host tool unexpectedly disappears, use the remaining useful window for bounded environment restoration: PATH inspection, installed variants, repository tooling, or package installation when permitted. Missing infrastructure is not an automatic early handoff condition.
+
+
+PHASE A — QUICK ENVIRONMENT PROOF
+
+Run and record:
+
+    zig version
+    command -v qemu-system-riscv64
+    qemu-system-riscv64 --version
+
+Expected Zig: 0.14.x.
+Expected QEMU: working RISC-V system emulator; prior pressure used QEMU 8.2.2.
+
+Do not spend the slice re-auditing unrelated architecture.
+
+
+PHASE B — REBUILD THE EXACT CANONICAL MACHINE
+
+Use the documented canonical Alpine v3.22.0 RV64 acquisition and namespace-backed Morphic build flow.
+
+Preserve canonical namespace/artifact identity.
+
+Use focused synthetic tests only as permanent mechanism proof. Every runtime repair must return immediately to the unchanged real Alpine apk workload.
+
+
+PHASE C — FIRST CAUSAL TARGET: 584-PAGE STARTUP / PREPARE->COMMIT ARRIVAL
+
+Reproduce the current enlarged machine under real QEMU with narrow timing/trace evidence sufficient to locate where the pre-exec delay/non-arrival occurs.
+
+Possible classes to inspect only when evidence points at them:
+
+- capacity-proportional zeroing of large linker-owned arrays;
+- whole-capacity struct copies or initialization;
+- scans across unused prepared backing;
+- capacity-wide page-table preparation;
+- repeated initialization whose cost grew with `prepared_image_pages`;
+- linker-reservation/layout effects;
+- another exact bounded mechanism exposed by the enlarged machine.
+
+Do not guess the cause.
+
+Identify the first measured producer.
+
+Implement the smallest general bounded repair.
+
+Preferred invariant:
+
+    capacity bounds ownership;
+    execution cost should scale with live/allocated state wherever practical.
+
+Examples, only if justified by evidence:
+
+- live-prefix initialization;
+- explicit initialized-length cursors;
+- lazy page preparation before first ownership;
+- sparse bounded metadata;
+- one-time initialization separated from per-exec work;
+- exact-range preparation instead of whole-reservation work.
+
+Keep explicit bounds. Do not replace bounded state with unconstrained allocation merely to pass apk.
+
+Add a focused regression/proof when practical.
+
+Then immediately rebuild and rerun the unchanged real apk workload.
+
+
+PHASE D — RE-PROVE THE APK LADDER
+
+Once external execution is again reached promptly, run in order:
+
+    /sbin/apk --version
+    /sbin/apk --help
+    apk info
+
+Capture exact output and exact first failure.
+
+Do not assume previous milestones survived the runtime repair.
+
+The first key Batch 32W proof is whether the already-measured 391-page anonymous allocation now succeeds in the real guest with the 584-page bound active.
+
+When it crosses, record the evidence and continue immediately.
+
+
+PHASE E — CONTINUAL APK SNOWBALL
+
+For the remainder of the useful slice, repeat this exact causal loop:
+
+    run unchanged real `apk info`
+        -> observe exact first failure
+        -> classify the failure
+        -> trace to the first bad producer/state transition
+        -> implement the smallest general bounded mechanism
+        -> add focused proof/regression
+        -> rebuild
+        -> rerun unchanged `apk info` immediately
+
+Do not batch speculative downstream features.
+Do not guess the next syscall.
+Do not special-case apk, musl, a PC, one address, one library, or one pathname.
+Do not patch a symptom when an earlier producer is demonstrably wrong.
+
+If an unsupported syscall becomes the real first blocker, implement only the smallest Linux/RV64 semantics required by the observed general contract, preserving deterministic errno and bounded ownership.
+
+If a mapping, FD, namespace, process, signal, time, threading, or filesystem invariant becomes causal, repair that invariant generally and immediately retry `apk info`.
+
+
+IF APK INFO SUCCEEDS
+
+Success of `apk info` is a major milestone, not the end of the engineering slice.
+
+Immediately preserve exact success output, then advance into the strongest real local apk behavior available without inventing network prerequisites.
+
+Preferred escalation order when supported by the real installed Alpine environment:
+
+1. repeat `apk info` to prove persistence;
+2. query installed package metadata / local package database through ordinary apk commands;
+3. exercise another read-only local apk query exposed by `apk --help`;
+4. if a real local `.apk` artifact is already available in the canonical environment, pressure local package inspection/install semantics without network access;
+5. otherwise continue through the next real local package-database behavior that is actually reachable.
+
+Do not fabricate package artifacts solely to claim package installation.
+
+If local package mutation becomes the next real frontier, allow that workload to expose filesystem calls causally.
+
+
+PERMANENT INVARIANTS
+
+Preserve all existing Morphic contracts:
+
+- PREPARE -> COMMIT;
+- failure atomicity and rollback;
+- W+X = 0;
+- SUM clear outside bounded user-copy windows;
+- immutable canonical Alpine source namespace plus bounded runtime writable state;
+- exact FD/resource ownership and shared-position semantics;
+- fork/private-file backing snapshot/restore correctness;
+- parent shell liveness;
+- deterministic Linux errno at the compatibility edge;
+- bounded memory/resource classes;
+- no workload-specific special cases;
+- no silent weakening of previously earned Playable Alpine behavior.
+
+If repeated process-state failures recur, audit the process-state contract holistically rather than stacking another narrow patch.
+
+
+PLAYABLE ALPINE REGRESSION GATE
+
+After runtime changes, and before final persistence, re-prove one persistent real Alpine shell with:
+
+    echo morphic
+    echo second
+    pwd
+    ls /
+    cat /etc/alpine-release
+    cd /tmp
+    pwd
+    echo hello > /tmp/hello
+    cat /tmp/hello
+    echo hello | cat
+    echo still-alive
+
+Expected results remain the canonical Playable Alpine contract.
+
+If the package-manager workload succeeds but this persistent-shell gate regresses, the batch is not clean.
+
+
+VALIDATION
+
+Run the focused tests for every admitted mechanism and the repository's canonical validation gates.
+
+At minimum preserve:
+
+    zig build test-recipe-run-hosted-morphic-runtime
+    zig build check
+
+and the canonical repository validation/command-reference checks used by the project.
+
+Keep evidence generation synchronized when source changes require it.
+
+
+FINAL ~30-MINUTE HANDOFF
+
+Only at approximately the time boundary, update/create:
+
+    docs/reports/AGENTIC_SNOWBALL_BATCH_32W.md
+
+The report must contain:
+
+- exact starting commit;
+- exact QEMU/Zig versions;
+- exact diagnosis of the 584-page startup/PREPARE->COMMIT issue;
+- smallest general mechanism admitted;
+- focused tests added;
+- every meaningful unchanged `apk info` retry and outcome;
+- explicit evidence whether the 391-page allocation succeeded;
+- exact `/sbin/apk --version` result;
+- exact `/sbin/apk --help` result;
+- exact `apk info` result;
+- any stronger local apk behavior achieved after `apk info` success;
+- canonical Playable Alpine re-proof result;
+- repository validation result;
+- final commit SHA;
+- exactly one next causal blocker if incomplete.
+
+If `apk info` succeeds, say so plainly and preserve the exact evidence.
+If it does not, do not imply package-database success.
+
+The desired shape of the run is:
+
+    inherited startup frontier
+        -> repair
+        -> real apk retry
+        -> repair
+        -> real apk retry
+        -> repair
+        -> APK INFO SUCCESS if achievable
+        -> stronger local apk pressure
+        -> continue until ~30 minutes
+        -> final report/handoff
+
+Begin.

@@ -39,6 +39,40 @@ pub fn BoundedRuntimeMappings(comptime capacity: usize, comptime page_size: usiz
             return mapping.permissions.read or mapping.permissions.write or mapping.permissions.execute;
         }
 
+        pub fn containsRange(self: *const Self, start: usize, length: usize) bool {
+            const end = std.math.add(usize, start, length) catch return false;
+            for (self.entries[0..self.count]) |entry|
+                if (entry.start <= start and end <= entry.end) return true;
+            return false;
+        }
+
+        pub fn releaseRange(self: *Self, start: usize, length: usize) Error!void {
+            if (length == 0 or start & (page_size - 1) != 0 or length & (page_size - 1) != 0) return error.InvalidRange;
+            const end = std.math.add(usize, start, length) catch return error.InvalidRange;
+            var replacement: [capacity]Mapping = undefined;
+            var replacement_count: usize = 0;
+            for (self.entries[0..self.count]) |entry| {
+                if (end <= entry.start or entry.end <= start) {
+                    if (replacement_count == capacity) return error.CapacityExceeded;
+                    replacement[replacement_count] = entry;
+                    replacement_count += 1;
+                } else {
+                    if (entry.start < start) {
+                        if (replacement_count == capacity) return error.CapacityExceeded;
+                        replacement[replacement_count] = .{ .start = entry.start, .end = start, .permissions = entry.permissions };
+                        replacement_count += 1;
+                    }
+                    if (end < entry.end) {
+                        if (replacement_count == capacity) return error.CapacityExceeded;
+                        replacement[replacement_count] = .{ .start = end, .end = entry.end, .permissions = entry.permissions };
+                        replacement_count += 1;
+                    }
+                }
+            }
+            self.entries = replacement;
+            self.count = replacement_count;
+        }
+
         /// Reserves an aligned half-open range. `pageOccupied` lets the caller
         /// include executable, stack, brk, and page-table truth without copying
         /// those mappings into this table. Failure never changes the table.
@@ -112,6 +146,27 @@ test "external occupied pages reject a reservation without mutation" {
     try std.testing.expectEqual(@as(usize, 0), table.count);
     try table.reserve(0x4000, 8192, .{}, true, {}, occupied);
     try std.testing.expectEqual(@as(usize, 1), table.count);
+}
+
+test "range containment is checked without mutation" {
+    const Table = BoundedRuntimeMappings(1, 4096);
+    var table: Table = .{};
+    try table.reserve(0x4000, 0x4000, .{ .read = true }, false, {}, neverOccupied);
+    try std.testing.expect(table.containsRange(0x5000, 0x2000));
+    try std.testing.expect(!table.containsRange(0x3000, 0x2000));
+    try std.testing.expect(!table.containsRange(0x7000, 0x2000));
+    try std.testing.expectEqual(@as(usize, 1), table.count);
+}
+
+test "release range splits ownership atomically" {
+    const Table = BoundedRuntimeMappings(3, 4096);
+    var table: Table = .{};
+    try table.reserve(0x4000, 0x4000, .{ .read = true }, false, {}, neverOccupied);
+    try table.releaseRange(0x5000, 0x2000);
+    try std.testing.expectEqual(@as(usize, 2), table.count);
+    try std.testing.expect(table.containsRange(0x4000, 0x1000));
+    try std.testing.expect(table.containsRange(0x7000, 0x1000));
+    try std.testing.expect(!table.containsRange(0x5000, 0x1000));
 }
 
 test "multi-page reservation is contiguous and rollback restores capacity" {

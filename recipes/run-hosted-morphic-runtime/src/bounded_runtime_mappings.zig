@@ -6,10 +6,14 @@ pub const Permissions = packed struct {
     execute: bool = false,
 };
 
+pub const BackingClass = enum { none, prepared, private_file };
+
 pub const Mapping = struct {
     start: usize,
     end: usize,
     permissions: Permissions,
+    backing_class: BackingClass = .none,
+    backing_start: usize = 0,
 };
 
 /// Allocation-free runtime address-range ownership. Linux flags and errno are
@@ -39,11 +43,65 @@ pub fn BoundedRuntimeMappings(comptime capacity: usize, comptime page_size: usiz
             return mapping.permissions.read or mapping.permissions.write or mapping.permissions.execute;
         }
 
+        pub fn setLastBacking(self: *Self, class: BackingClass, start: usize) void {
+            std.debug.assert(self.count != 0);
+            self.entries[self.count - 1].backing_class = class;
+            self.entries[self.count - 1].backing_start = start;
+        }
+
         pub fn containsRange(self: *const Self, start: usize, length: usize) bool {
             const end = std.math.add(usize, start, length) catch return false;
             for (self.entries[0..self.count]) |entry|
                 if (entry.start <= start and end <= entry.end) return true;
             return false;
+        }
+
+        pub fn mappingAt(self: *const Self, address: usize) ?Mapping {
+            for (self.entries[0..self.count]) |entry|
+                if (entry.start <= address and address < entry.end) return entry;
+            return null;
+        }
+
+        pub fn protectRange(self: *Self, start: usize, length: usize, permissions: Permissions) Error!void {
+            const current = self.mappingAt(start) orelse return error.InvalidRange;
+            const end = std.math.add(usize, start, length) catch return error.InvalidRange;
+            if (length == 0 or start & (page_size - 1) != 0 or length & (page_size - 1) != 0 or end > current.end) return error.InvalidRange;
+            if (permissions.write and permissions.execute) return error.WriteExecute;
+            var extra: usize = 0;
+            if (current.start < start) extra += 1;
+            if (end < current.end) extra += 1;
+            if (self.count + extra > capacity) return error.CapacityExceeded;
+            const index = for (self.entries[0..self.count], 0..) |entry, i| {
+                if (entry.start == current.start) break i;
+            } else unreachable;
+            var replacement: [capacity]Mapping = undefined;
+            var out: usize = 0;
+            for (self.entries[0..self.count], 0..) |entry, i| {
+                if (i != index) {
+                    replacement[out] = entry;
+                    out += 1;
+                    continue;
+                }
+                if (entry.start < start) {
+                    replacement[out] = entry;
+                    replacement[out].end = start;
+                    out += 1;
+                }
+                replacement[out] = entry;
+                replacement[out].start = start;
+                replacement[out].end = end;
+                replacement[out].permissions = permissions;
+                replacement[out].backing_start += (start - entry.start) / page_size;
+                out += 1;
+                if (end < entry.end) {
+                    replacement[out] = entry;
+                    replacement[out].start = end;
+                    replacement[out].backing_start += (end - entry.start) / page_size;
+                    out += 1;
+                }
+            }
+            self.entries = replacement;
+            self.count = out;
         }
 
         pub fn releaseRange(self: *Self, start: usize, length: usize) Error!void {
@@ -59,14 +117,54 @@ pub fn BoundedRuntimeMappings(comptime capacity: usize, comptime page_size: usiz
                 } else {
                     if (entry.start < start) {
                         if (replacement_count == capacity) return error.CapacityExceeded;
-                        replacement[replacement_count] = .{ .start = entry.start, .end = start, .permissions = entry.permissions };
+                        replacement[replacement_count] = entry;
+                        replacement[replacement_count].end = start;
                         replacement_count += 1;
                     }
                     if (end < entry.end) {
                         if (replacement_count == capacity) return error.CapacityExceeded;
-                        replacement[replacement_count] = .{ .start = end, .end = entry.end, .permissions = entry.permissions };
+                        replacement[replacement_count] = entry;
+                        replacement[replacement_count].start = end;
+                        if (entry.backing_class != .none)
+                            replacement[replacement_count].backing_start += (end - entry.start) / page_size;
                         replacement_count += 1;
                     }
+                }
+            }
+            self.entries = replacement;
+            self.count = replacement_count;
+        }
+
+        /// Reclassifies a contained subrange after a fixed replacement. The
+        /// complete replacement table is prepared before mutation.
+        pub fn replaceBackingRange(self: *Self, start: usize, length: usize, permissions: Permissions, class: BackingClass, backing_start: usize) Error!void {
+            if (!self.containsRange(start, length) or permissions.write and permissions.execute) return error.InvalidRange;
+            const end = start + length;
+            var replacement: [capacity]Mapping = undefined;
+            var replacement_count: usize = 0;
+            for (self.entries[0..self.count]) |entry| {
+                if (end <= entry.start or entry.end <= start) {
+                    if (replacement_count == capacity) return error.CapacityExceeded;
+                    replacement[replacement_count] = entry;
+                    replacement_count += 1;
+                    continue;
+                }
+                if (entry.start < start) {
+                    if (replacement_count == capacity) return error.CapacityExceeded;
+                    replacement[replacement_count] = entry;
+                    replacement[replacement_count].end = start;
+                    replacement_count += 1;
+                }
+                if (replacement_count == capacity) return error.CapacityExceeded;
+                replacement[replacement_count] = .{ .start = start, .end = end, .permissions = permissions, .backing_class = class, .backing_start = backing_start };
+                replacement_count += 1;
+                if (end < entry.end) {
+                    if (replacement_count == capacity) return error.CapacityExceeded;
+                    replacement[replacement_count] = entry;
+                    replacement[replacement_count].start = end;
+                    if (entry.backing_class != .none)
+                        replacement[replacement_count].backing_start += (end - entry.start) / page_size;
+                    replacement_count += 1;
                 }
             }
             self.entries = replacement;
@@ -200,4 +298,46 @@ test "no-access reservations remain unbacked while accessible mappings require b
     const Table = BoundedRuntimeMappings(2, 4096);
     try std.testing.expect(!Table.hasBacking(.{ .start = 0x1000, .end = 0x2000, .permissions = .{} }));
     try std.testing.expect(Table.hasBacking(.{ .start = 0x2000, .end = 0x3000, .permissions = .{ .read = true } }));
+}
+
+test "snapshot preserves backing identity and split cursor offsets" {
+    const Table = BoundedRuntimeMappings(3, 4096);
+    var parent: Table = .{};
+    try parent.reserve(0x4000, 0x3000, .{ .read = true }, false, {}, neverOccupied);
+    parent.setLastBacking(.private_file, 7);
+    const snapshot = parent;
+
+    parent = .{}; // child exec/reset may freely reuse its process-local table.
+    try parent.reserve(0x9000, 0x1000, .{ .read = true, .write = true }, false, {}, neverOccupied);
+    parent.setLastBacking(.prepared, 2);
+    parent = snapshot;
+    try parent.releaseRange(0x5000, 0x1000);
+
+    try std.testing.expectEqual(BackingClass.private_file, parent.entries[0].backing_class);
+    try std.testing.expectEqual(@as(usize, 7), parent.entries[0].backing_start);
+    try std.testing.expectEqual(BackingClass.private_file, parent.entries[1].backing_class);
+    try std.testing.expectEqual(@as(usize, 9), parent.entries[1].backing_start);
+}
+
+test "fixed replacement records private backing atomically" {
+    const Table = BoundedRuntimeMappings(3, 4096);
+    var table: Table = .{};
+    try table.reserve(0x4000, 0x3000, .{}, false, {}, neverOccupied);
+    try table.replaceBackingRange(0x5000, 0x1000, .{ .read = true, .execute = true }, .private_file, 11);
+    try std.testing.expectEqual(@as(usize, 3), table.count);
+    try std.testing.expectEqual(BackingClass.private_file, table.entries[1].backing_class);
+    try std.testing.expectEqual(@as(usize, 11), table.entries[1].backing_start);
+    try std.testing.expect(table.entries[1].permissions.execute);
+}
+
+test "protection split retains backing offsets" {
+    const Table = BoundedRuntimeMappings(3, 4096);
+    var table: Table = .{};
+    try table.reserve(0x4000, 0x3000, .{ .read = true, .write = true }, false, {}, neverOccupied);
+    table.setLastBacking(.prepared, 4);
+    try table.protectRange(0x5000, 0x1000, .{ .read = true });
+    try std.testing.expectEqual(@as(usize, 3), table.count);
+    try std.testing.expectEqual(@as(usize, 5), table.entries[1].backing_start);
+    try std.testing.expect(!table.entries[1].permissions.write);
+    try std.testing.expectEqual(@as(usize, 6), table.entries[2].backing_start);
 }

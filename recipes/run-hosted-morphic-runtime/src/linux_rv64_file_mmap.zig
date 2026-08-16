@@ -50,7 +50,7 @@ pub fn plan(file_size: usize, length: usize, protection: usize, flags: usize, of
 
 /// Owns the failure-atomic reserve/prepare/map transaction used by the runtime.
 /// The context supplies `occupied`, `prepare`, `mapPage`, and `unmapPage`.
-pub fn mapPrivate(plan_value: Plan, start: usize, mappings: anytype, context: anytype, page_occupied: fn (@TypeOf(context), usize) bool) !void {
+pub fn mapPrivate(plan_value: Plan, start: usize, backing_start: usize, mappings: anytype, context: anytype, page_occupied: fn (@TypeOf(context), usize) bool) !void {
     try mappings.reserve(start, plan_value.mapped_length, .{
         .read = plan_value.permissions.read,
         .write = plan_value.permissions.write,
@@ -71,6 +71,7 @@ pub fn mapPrivate(plan_value: Plan, start: usize, mappings: anytype, context: an
             return err;
         };
     }
+    mappings.setLastBacking(.private_file, backing_start);
 }
 
 test "private executable mapping copies exact range and clears page tail" {
@@ -158,18 +159,18 @@ test "capacity collision and forced mapping failure leave no reservation" {
 
     var collision_table: Table = .{};
     var collision_context: Context = .{};
-    try std.testing.expectError(error.Collision, mapPrivate(prepared, 0x3000, &collision_table, &collision_context, Context.occupied));
+    try std.testing.expectError(error.Collision, mapPrivate(prepared, 0x3000, 0, &collision_table, &collision_context, Context.occupied));
     try std.testing.expectEqual(@as(usize, 0), collision_table.count);
 
     var failure_table: Table = .{};
     var failure_context: Context = .{ .fail_page = 1 };
-    try std.testing.expectError(error.ForcedMapFailure, mapPrivate(prepared, 0x4000, &failure_table, &failure_context, Context.occupied));
+    try std.testing.expectError(error.ForcedMapFailure, mapPrivate(prepared, 0x4000, 0, &failure_table, &failure_context, Context.occupied));
     try std.testing.expectEqual(@as(usize, 0), failure_table.count);
     try std.testing.expectEqual(@as(usize, 0), failure_context.installed);
     try std.testing.expectEqualSlices(u8, &.{ 1, 2, 3, 4, 5, 6, 7, 8 }, &failure_context.source);
 
     try failure_table.reserve(0x5000, 4, .{}, false, &failure_context, Context.occupied);
     var full_context: Context = .{};
-    try std.testing.expectError(error.CapacityExceeded, mapPrivate(prepared, 0x6000, &failure_table, &full_context, Context.occupied));
+    try std.testing.expectError(error.CapacityExceeded, mapPrivate(prepared, 0x6000, 0, &failure_table, &full_context, Context.occupied));
     try std.testing.expectEqual(@as(usize, 1), failure_table.count);
 }

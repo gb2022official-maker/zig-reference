@@ -19,6 +19,7 @@ const external_artifact_options = @import("external-artifact-options");
 const bounded_syscall_evidence = @import("bounded_syscall_evidence.zig");
 const bounded_mapping_preflight = @import("bounded_mapping_preflight.zig");
 const linux_rv64_clone_request = @import("linux_rv64_clone_request.zig");
+const bounded_fork_private_backing = @import("bounded_fork_private_backing.zig");
 const linux_rv64_fdupfd = @import("linux_rv64_fdupfd.zig");
 const linux_rv64_dup3 = @import("linux_rv64_dup3.zig");
 const linux_rv64_fstat = @import("linux_rv64_fstat.zig");
@@ -118,7 +119,10 @@ const physical_pool_pages = 8;
 const ordinary_table_pages = 4;
 // One dedicated table page covers the separately placed caller-artifact
 // transport; the remaining bound preserves the prepared execution mappings.
-const prepared_table_pages = 16;
+// Fork-private snapshot storage moves the bounded backing across one more
+// physical layout band; retain two additional PREPARE table frames so the
+// unchanged external image transaction remains possible.
+const prepared_table_pages = 32;
 // The exact BusyBox image occupies 244 pages; exec starts a fresh dynamic
 // loader and therefore needs bounded post-image brk/mmap headroom rather than
 // inheriting the original shell's already-established allocator state.
@@ -126,7 +130,10 @@ const prepared_image_pages = 320;
 // Private file mappings use a distinct monotonic bounded pool so a large
 // shared object cannot consume exec/brk backing. The linker keeps both pools
 // in the prepared reservation below caller-artifact transport.
-const private_file_mapping_pages = 2048;
+// The real Alpine dependency graph retains 0x526 pages before its next
+// libcrypto transaction, whose bounded whole-file reservation crosses the old
+// 2,048-page ceiling. Keep a 3,072-page class-specific bound.
+const private_file_mapping_pages = 3072;
 const external_stack_pages = 2;
 var prepared_table_backing: [prepared_table_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
 var external_prepared_backing: [prepared_image_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
@@ -499,6 +506,8 @@ var external_fork_bindings: ProcessBindings = undefined;
 var external_fork_mappings: ExternalRuntimeMappings = undefined;
 var external_fork_program_break: usize = 0;
 var external_fork_next_backing: usize = 0;
+var external_fork_private_file_snapshot: [private_file_mapping_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
+var external_fork_next_private_file_backing: usize = 0;
 const ProcessCwd = bounded_process_cwd.CurrentDirectory(256);
 var external_process_cwd: ProcessCwd = .{};
 var external_fork_cwd: ProcessCwd = .{};
@@ -1528,7 +1537,7 @@ fn externalExecve(frame: *TrapFrame) usize {
     return 0;
 }
 
-const LinuxRequestKind = enum { get_current_directory, change_directory, duplicate, duplicate_to, fcntl, close, pipe2, open_at, get_directory_entries, read, write, write_vector, new_fstatat, fstat, program_break, memory_unmap, clone, execve, memory_map, terminate, unsupported };
+const LinuxRequestKind = enum { get_current_directory, change_directory, duplicate, duplicate_to, fcntl, close, pipe2, open_at, get_directory_entries, read, write, write_vector, new_fstatat, fstat, program_break, memory_unmap, clone, execve, memory_map, memory_protect, terminate, unsupported };
 fn decodeLinuxRequestKind(number: usize) LinuxRequestKind {
     return switch (number) {
         17 => .get_current_directory,
@@ -1550,12 +1559,13 @@ fn decodeLinuxRequestKind(number: usize) LinuxRequestKind {
         220 => .clone,
         221 => .execve,
         222 => .memory_map,
+        226 => .memory_protect,
         93, 94 => .terminate,
         else => .unsupported,
     };
 }
 comptime {
-    if (decodeLinuxRequestKind(17) != .get_current_directory or decodeLinuxRequestKind(49) != .change_directory or decodeLinuxRequestKind(23) != .duplicate or decodeLinuxRequestKind(24) != .duplicate_to or decodeLinuxRequestKind(25) != .fcntl or decodeLinuxRequestKind(56) != .open_at or decodeLinuxRequestKind(57) != .close or decodeLinuxRequestKind(59) != .pipe2 or decodeLinuxRequestKind(61) != .get_directory_entries or decodeLinuxRequestKind(63) != .read or decodeLinuxRequestKind(64) != .write or decodeLinuxRequestKind(66) != .write_vector or decodeLinuxRequestKind(79) != .new_fstatat or decodeLinuxRequestKind(80) != .fstat or decodeLinuxRequestKind(214) != .program_break or decodeLinuxRequestKind(215) != .memory_unmap or decodeLinuxRequestKind(220) != .clone or decodeLinuxRequestKind(221) != .execve or decodeLinuxRequestKind(222) != .memory_map or decodeLinuxRequestKind(93) != .terminate or decodeLinuxRequestKind(94) != .terminate or decodeLinuxRequestKind(0x7fff) != .unsupported) @compileError("Linux/RV64 decoder drift");
+    if (decodeLinuxRequestKind(17) != .get_current_directory or decodeLinuxRequestKind(49) != .change_directory or decodeLinuxRequestKind(23) != .duplicate or decodeLinuxRequestKind(24) != .duplicate_to or decodeLinuxRequestKind(25) != .fcntl or decodeLinuxRequestKind(56) != .open_at or decodeLinuxRequestKind(57) != .close or decodeLinuxRequestKind(59) != .pipe2 or decodeLinuxRequestKind(61) != .get_directory_entries or decodeLinuxRequestKind(63) != .read or decodeLinuxRequestKind(64) != .write or decodeLinuxRequestKind(66) != .write_vector or decodeLinuxRequestKind(79) != .new_fstatat or decodeLinuxRequestKind(80) != .fstat or decodeLinuxRequestKind(214) != .program_break or decodeLinuxRequestKind(215) != .memory_unmap or decodeLinuxRequestKind(220) != .clone or decodeLinuxRequestKind(221) != .execve or decodeLinuxRequestKind(222) != .memory_map or decodeLinuxRequestKind(226) != .memory_protect or decodeLinuxRequestKind(93) != .terminate or decodeLinuxRequestKind(94) != .terminate or decodeLinuxRequestKind(0x7fff) != .unsupported) @compileError("Linux/RV64 decoder drift");
 }
 
 fn copyPipeDescriptors(destination: usize, descriptors: [2]usize) !void {
@@ -1823,6 +1833,28 @@ fn externalPageOccupied(_: void, page: usize) bool {
     return leaf.raw_entry & 1 != 0 and leaf.raw_entry & 0xe != 0;
 }
 
+fn externalProcessOwnsPage(page: usize) bool {
+    if (external_runtime_mappings.mappingAt(page) != null) return true;
+    for (external_image.items()) |item| if (item.virtual_start == page) return true;
+    for (external_interpreter_image.items()) |item| if (item.virtual_start == page) return true;
+    return page >= imageBreakStart(&external_image) and page < ((external_program_break + frames.PageSize - 1) & ~@as(usize, frames.PageSize - 1));
+}
+
+fn externalMmapNoMemory(stage: []const u8) usize {
+    if (external_artifact_options.live_console_input) {
+        write("ZIGREF_MMAP_ENOMEM stage=");
+        write(stage);
+        write(" mappings=");
+        writeUsizeHex(external_runtime_mappings.count);
+        write(" private_cursor=");
+        writeUsizeHex(external_next_private_file_backing);
+        write(" prepared_cursor=");
+        writeUsizeHex(external_next_backing);
+        write("\n");
+    }
+    return negativeErrno(12);
+}
+
 const ExternalFileMmapContext = struct {
     source: []const u8,
     backing_start: usize,
@@ -1875,8 +1907,8 @@ fn externalFileMmap(length: usize, protection: usize, flags: usize, descriptor: 
         error.AddressOverflow => 12,
     });
     const page_count = plan.accessible_length / frames.PageSize;
-    const backing_end = std.math.add(usize, external_next_private_file_backing, page_count) catch return negativeErrno(12);
-    if (backing_end > private_file_mapping_pages) return negativeErrno(12);
+    const backing_end = std.math.add(usize, external_next_private_file_backing, page_count) catch return externalMmapNoMemory("private-cursor-overflow");
+    if (backing_end > private_file_mapping_pages) return externalMmapNoMemory("private-backing-capacity");
 
     var candidate = external_program_break;
     while (candidate < user_stack_va) : (candidate += frames.PageSize) {
@@ -1884,20 +1916,20 @@ fn externalFileMmap(length: usize, protection: usize, flags: usize, descriptor: 
             .source = external_rv64_namespace_data[data_offset .. data_offset + data_length],
             .backing_start = external_next_private_file_backing,
         };
-        linux_rv64_file_mmap.mapPrivate(plan, candidate, &external_runtime_mappings, &context, ExternalFileMmapContext.occupied) catch |err| switch (err) {
+        linux_rv64_file_mmap.mapPrivate(plan, candidate, external_next_private_file_backing, &external_runtime_mappings, &context, ExternalFileMmapContext.occupied) catch |err| switch (err) {
             error.Collision => continue,
             error.InvalidRange, error.WriteExecute => return negativeErrno(22),
-            error.CapacityExceeded => return negativeErrno(12),
+            error.CapacityExceeded => return externalMmapNoMemory("mapping-table-capacity"),
             else => {
                 asm volatile ("sfence.vma" ::: "memory");
-                return negativeErrno(12);
+                return externalMmapNoMemory("page-table-map");
             },
         };
         external_next_private_file_backing = backing_end;
         asm volatile ("sfence.vma" ::: "memory");
         return candidate;
     }
-    return negativeErrno(12);
+    return externalMmapNoMemory("virtual-address-search");
 }
 
 fn externalFixedFileMmap(address: usize, length: usize, protection: usize, descriptor: usize, offset: usize) usize {
@@ -1913,8 +1945,14 @@ fn externalFixedFileMmap(address: usize, length: usize, protection: usize, descr
     if (data_offset > external_rv64_namespace_data.len or data_length > external_rv64_namespace_data.len - data_offset) return negativeErrno(5);
     const plan = linux_rv64_file_mmap.plan(data_length, length, protection, 0x2, offset, frames.PageSize) catch return negativeErrno(22);
     const page_count = plan.accessible_length / frames.PageSize;
-    const backing_end = std.math.add(usize, external_next_private_file_backing, page_count) catch return negativeErrno(12);
-    if (backing_end > private_file_mapping_pages) return negativeErrno(12);
+    const backing_end = std.math.add(usize, external_next_private_file_backing, page_count) catch return externalMmapNoMemory("fixed-private-cursor-overflow");
+    if (backing_end > private_file_mapping_pages) return externalMmapNoMemory("fixed-private-backing-capacity");
+    if (plan.accessible_length != 0)
+        external_runtime_mappings.replaceBackingRange(address, plan.accessible_length, .{
+            .read = plan.permissions.read,
+            .write = plan.permissions.write,
+            .execute = plan.permissions.execute,
+        }, .private_file, external_next_private_file_backing) catch return externalMmapNoMemory("fixed-mapping-table-capacity");
     var context = ExternalFileMmapContext{ .source = external_rv64_namespace_data[data_offset .. data_offset + data_length], .backing_start = external_next_private_file_backing };
     context.prepare(plan) catch return negativeErrno(12);
     var page: usize = 0;
@@ -2193,6 +2231,7 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 external_fork_mappings = external_runtime_mappings;
                 external_fork_program_break = external_program_break;
                 external_fork_next_backing = external_next_backing;
+                external_fork_next_private_file_backing = bounded_fork_private_backing.snapshot(&external_private_file_backing, &external_fork_private_file_snapshot, external_next_private_file_backing);
                 external_fork_cwd = external_process_cwd;
                 frame.x[10] = 0;
             }
@@ -2244,6 +2283,33 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 frame.x[10] = externalFileMmap(length, protection, flags, descriptor, offset);
             } else if (address != 0 and flags == 0x12) {
                 frame.x[10] = externalFixedFileMmap(address, length, protection, descriptor, offset);
+            } else if (address != 0 and protection == 3 and flags == 0x32 and descriptor == std.math.maxInt(usize) and offset == 0 and external_runtime_mappings.containsRange(address, length)) {
+                const page_count = ExternalRuntimeMappings.pageCount(length) catch {
+                    frame.x[10] = negativeErrno(22);
+                    return finishReturningSyscall(frame, index);
+                };
+                const backing_end = std.math.add(usize, external_next_backing, page_count) catch {
+                    frame.x[10] = externalMmapNoMemory("fixed-anonymous-cursor-overflow");
+                    return finishReturningSyscall(frame, index);
+                };
+                if (backing_end > prepared_image_pages) {
+                    frame.x[10] = externalMmapNoMemory("fixed-anonymous-backing-capacity");
+                    return finishReturningSyscall(frame, index);
+                }
+                external_runtime_mappings.replaceBackingRange(address, length, .{ .read = true, .write = true }, .prepared, external_next_backing) catch {
+                    frame.x[10] = externalMmapNoMemory("fixed-anonymous-mapping-capacity");
+                    return finishReturningSyscall(frame, index);
+                };
+                for (external_prepared_backing[external_next_backing..backing_end]) |*backing| @memset(backing, 0);
+                var page: usize = 0;
+                while (page < page_count) : (page += 1) {
+                    const virtual = address + page * frames.PageSize;
+                    if (externalPageOccupied({}, virtual)) _ = batch26_builder.unmapPage(virtual, .page_4k) catch shutdown();
+                    _ = batch26_builder.mapPage(virtual, @intFromPtr(&external_prepared_backing[external_next_backing + page]), .page_4k, .{ .read = true, .write = true, .user = true, .accessed = true, .dirty = true }) catch shutdown();
+                }
+                external_next_backing = backing_end;
+                asm volatile ("sfence.vma" ::: "memory");
+                frame.x[10] = address;
             } else if (descriptor != std.math.maxInt(usize) or offset != 0 or length == 0) {
                 if (external_artifact_options.live_console_input) {
                     write("LINUX_MMAP_REJECT address=");
@@ -2296,6 +2362,7 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                             return finishReturningSyscall(frame, index);
                         },
                     };
+                    external_runtime_mappings.setLastBacking(.prepared, external_next_backing);
                     // Prepare every anonymous page before exposing any leaf.
                     // Backing ownership and the reservation commit only after
                     // every page maps; a mid-map failure removes installed
@@ -2340,6 +2407,40 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 frame.x[10] = negativeErrno(22);
             }
         },
+        .memory_protect => {
+            const address = frame.x[10];
+            const length = frame.x[11];
+            const protection = frame.x[12];
+            const rounded = std.math.add(usize, length, frames.PageSize - 1) catch {
+                frame.x[10] = negativeErrno(22);
+                return finishReturningSyscall(frame, index);
+            };
+            const mapped_length = rounded & ~@as(usize, frames.PageSize - 1);
+            var owned = mapped_length != 0 and address & (frames.PageSize - 1) == 0;
+            var ownership_page = address;
+            while (owned and ownership_page < address + mapped_length) : (ownership_page += frames.PageSize)
+                owned = externalProcessOwnsPage(ownership_page);
+            if (!owned or protection & ~@as(usize, 7) != 0 or protection & 2 != 0 and protection & 4 != 0) {
+                frame.x[10] = negativeErrno(22);
+            } else {
+                if (external_runtime_mappings.containsRange(address, mapped_length))
+                    external_runtime_mappings.protectRange(address, mapped_length, .{ .read = protection & 1 != 0, .write = protection & 2 != 0, .execute = protection & 4 != 0 }) catch {
+                        frame.x[10] = negativeErrno(12);
+                        return finishReturningSyscall(frame, index);
+                    };
+                var page = address;
+                while (page < address + mapped_length) : (page += frames.PageSize) {
+                    const leaf = batch26_builder.query(page) catch shutdown();
+                    const physical = leaf.physical_address;
+                    if (externalPageOccupied({}, page)) _ = batch26_builder.unmapPage(page, .page_4k) catch shutdown();
+                    if (protection != 0) {
+                        _ = batch26_builder.mapPage(page, physical, .page_4k, .{ .read = protection & 1 != 0, .write = protection & 2 != 0, .execute = protection & 4 != 0, .user = true, .accessed = true, .dirty = protection & 2 != 0 }) catch shutdown();
+                    }
+                }
+                asm volatile ("sfence.vma; fence.i" ::: "memory");
+                frame.x[10] = 0;
+            }
+        },
         .terminate => blk: {
             syscall_semantics[index] = 3;
             if (external_fork_parent) |parent| {
@@ -2365,9 +2466,16 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 external_runtime_mappings = external_fork_mappings;
                 external_program_break = external_fork_program_break;
                 external_next_backing = external_fork_next_backing;
+                external_next_private_file_backing = bounded_fork_private_backing.restore(&external_private_file_backing, &external_fork_private_file_snapshot, external_fork_next_private_file_backing);
                 external_process_cwd = external_fork_cwd;
                 installExternalImage(&external_image, &external_prepared_backing);
                 installExternalImage(&external_interpreter_image, &external_interpreter_backing);
+                const restored_stack_base = user_stack_va + frames.PageSize - external_stack_pages * frames.PageSize;
+                for (0..external_stack_pages) |stack_page| {
+                    const virtual = restored_stack_base + stack_page * frames.PageSize;
+                    if (externalPageOccupied({}, virtual)) _ = batch26_builder.unmapPage(virtual, .page_4k) catch shutdown();
+                    _ = batch26_builder.mapPage(virtual, @intFromPtr(&external_prepared_stack[stack_page]), .page_4k, .{ .read = true, .write = true, .user = true, .accessed = true, .dirty = true }) catch shutdown();
+                }
                 var restored_backing_index = external_image.items().len;
                 var restored_break_page = imageBreakStart(&external_image);
                 const restored_break_end = (external_program_break + frames.PageSize - 1) & ~@as(usize, frames.PageSize - 1);
@@ -2382,9 +2490,13 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                     if (!ExternalRuntimeMappings.hasBacking(mapping)) continue;
                     var page = mapping.start;
                     while (page < mapping.end) : (page += frames.PageSize) {
-                        const physical = @intFromPtr(&external_prepared_backing[restored_backing_index]);
+                        const backing_index = mapping.backing_start + (page - mapping.start) / frames.PageSize;
+                        const physical = switch (mapping.backing_class) {
+                            .prepared => @intFromPtr(&external_prepared_backing[backing_index]),
+                            .private_file => @intFromPtr(&external_private_file_backing[backing_index]),
+                            .none => shutdown(),
+                        };
                         _ = batch26_builder.mapPage(page, physical, .page_4k, .{ .read = mapping.permissions.read, .write = mapping.permissions.write, .execute = mapping.permissions.execute, .user = true, .accessed = true, .dirty = mapping.permissions.write }) catch shutdown();
-                        restored_backing_index += 1;
                     }
                 }
                 asm volatile ("sfence.vma; fence.i" ::: "memory");
@@ -2414,6 +2526,12 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 writeUsizeHex(@intFromPtr(frame));
                 write(" user_sp=");
                 writeUsizeHex(frame.x[2]);
+                write(" a0=");
+                writeUsizeHex(frame.x[10]);
+                write(" a1=");
+                writeUsizeHex(frame.x[11]);
+                write(" a2=");
+                writeUsizeHex(frame.x[12]);
                 write("\n");
             }
         },

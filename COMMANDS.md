@@ -735,3 +735,11 @@ EOF reservation correction, fixed private file replacement, and `munmap(215)`;
 the latest unchanged `/sbin/apk --version` reaches a deterministic first
 libcrypto `ENOMEM`. The full Playable Alpine persistent-shell sequence passed
 under the same rebuilt runtime. No new developer command was introduced.
+Batch 32U reused the canonical Alpine namespace acquisition, live-console
+build, and system-QEMU pressure commands. The focused Morphic recipe test and
+real `/sbin/apk --version` passed after fork-private backing restoration,
+stage-specific mmap ENOMEM evidence, bounded backing/table growth, fixed
+anonymous replacement, relative symlink resolution, and Linux/RV64 mprotect.
+The same real machine reached `/sbin/apk --help` output and began `apk info`;
+`docs/reports/AGENTIC_SNOWBALL_BATCH_32U.md` records the exact remaining
+boundary. No runnable command surface changed.

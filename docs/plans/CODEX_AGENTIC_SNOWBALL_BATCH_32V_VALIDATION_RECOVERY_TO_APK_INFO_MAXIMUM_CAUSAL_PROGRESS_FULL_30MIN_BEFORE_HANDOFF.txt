@@ -1,0 +1,206 @@
+# CODEX AGENTIC SNOWBALL — BATCH 32V
+# Validation recovery -> real apk info maximum causal progress
+# Full useful ~30-minute implementation window; handoff is the final action
+
+Repository: thanks-cohn/zig-reference
+Start point: current main
+
+Historical checkpoint carried forward:
+- PR #98
+- PR head: 08ed237f00923bb915babe0d48ff310e3a16ac5c
+- merge commit: 2bbe272e4b3b3ded824bd3d3a64b60be0f267b1f
+- GitHub validate run: 31926416535
+- failed job: 95114607166
+
+PR #98 was intentionally merged to preserve major runtime progress despite one known repository-validation debt. The merge is not a green-CI claim.
+
+EARNED STATE THAT MUST NOT BE REGRESSED
+
+- canonical Alpine v3.22.0 RV64 remains Playable under Morphic
+- persistent shell gate passed
+- fork/private-file mmap backing identity and snapshot/restore were repaired
+- PROT_NONE mprotect transitions were repaired to be backing-aware
+- fixed-anonymous replacement was made failure-atomic
+- /sbin/apk --version succeeds and prints:
+  apk-tools 2.14.9, compiled for riscv64
+- /sbin/apk --help reaches real apk execution/output
+- fresh apk info reaches dependency loading + RELRO and then faults in musl memset around:
+  PC 0x4004df9a
+  store address 0x8
+
+FIRST REQUIRED ACTION — CLOSE THE KNOWN RED VALIDATION DEBT
+
+The authoritative GitHub failure was:
+
+  validation evidence error: fixed-capacity-vector: stale source digest; regenerate validation evidence
+
+from `zig build check` / `tools/record-validation.py --check`.
+
+This is deterministic repository-owned derived evidence. Do not weaken or bypass the check.
+
+From current main:
+
+1. identify the repository's canonical validation-evidence regeneration command/tooling;
+2. regenerate only the required canonical evidence;
+3. persist every required generated/evidence file;
+4. run at minimum:
+   - zig fmt --check build.zig projects recipes conformance
+   - zig build check
+   - python3 tools/developer-command.py validate-repository
+   - PYTHONDONTWRITEBYTECODE=1 python3 tools/check-command-reference.py --check
+   - git diff --check
+5. if validation exposes another deterministic generated-state issue, repair it generally and rerun the same gate;
+6. do not spend the entire run polishing validation once the repository is green.
+
+AS SOON AS VALIDATION IS GREEN, IMMEDIATELY RETURN TO REAL APK PRESSURE.
+
+Do not stop because the inherited red gate was repaired.
+Do not enter handoff mode merely because `zig build check` becomes green.
+The validation repair is the opening gate, not the goal of Batch 32V.
+
+REAL QEMU CAUSAL LOOP
+
+Verify infrastructure first if needed:
+
+  zig version
+  command -v qemu-system-riscv64
+  qemu-system-riscv64 --version
+
+Then rebuild the exact canonical namespace-backed Alpine machine and re-prove:
+
+  /sbin/apk --version
+
+Expected earned output:
+
+  apk-tools 2.14.9, compiled for riscv64
+
+Then immediately run:
+
+  /sbin/apk --help
+
+and then the primary pressure command:
+
+  apk info
+
+The currently observed first causal frontier is the fresh `apk info` musl `memset` fault with a null-derived destination around `0x8` at PC `0x4004df9a`.
+
+Do not patch musl memset itself.
+Do not special-case apk, libapk, libcrypto, paths, descriptors, addresses, or package names.
+Do not guess which subsystem is wrong.
+
+Trace backward from the real fault to identify the first producer of the invalid/null-derived destination. Determine whether it comes from process state, memory-map topology/backing, brk/heap state, TLS/thread state, syscall return semantics, resource ownership, parent restoration, or another directly evidenced mechanism.
+
+For every causal repair:
+
+  observe exact real failure
+    -> classify the first bad producer
+    -> implement the smallest general bounded mechanism
+    -> add focused permanent proof
+    -> rebuild the exact real machine
+    -> rerun unchanged `apk info` immediately
+
+Continue this loop through as many directly exposed blockers as the useful working window permits.
+
+If `apk info` succeeds, continue immediately into the next local apk/package-database operation exposed by the real Alpine environment. Prefer real package-manager behavior over synthetic feature accumulation.
+
+If a repaired blocker exposes a different real failure than the historical memset fault, follow the new observed frontier rather than forcing the old hypothesis.
+
+MANDATORY INVARIANTS
+
+Preserve throughout:
+
+- PREPARE -> COMMIT discipline
+- rollback/failure atomicity
+- W+X=0
+- SUM-clear discipline
+- bounded resource pools
+- immutable namespace source bytes
+- descriptor/resource ownership
+- mapping backing identity and offsets
+- fork/child-exec/parent-restore correctness
+- file position preservation where required
+- deterministic Linux errno
+- parent shell liveness
+- no workload-specific special cases
+
+PLAYABLE ALPINE SAFETY GATE
+
+After runtime semantic changes, re-prove in one persistent shell:
+
+  echo morphic
+  echo second
+  pwd
+  ls /
+  cat /etc/alpine-release
+  cd /tmp
+  pwd
+  echo hello > /tmp/hello
+  cat /tmp/hello
+  echo hello | cat
+  echo still-alive
+
+Expected evidence includes:
+
+  morphic
+  second
+  /
+  real Alpine root entries
+  3.22.0
+  /tmp
+  hello
+  hello
+  still-alive
+
+TIME DISCIPLINE — IMPORTANT
+
+Use the full useful ~30-minute engineering window.
+
+The sequence is:
+
+  validation recovery
+    -> apk --version
+    -> apk --help
+    -> apk info
+    -> repair
+    -> apk info
+    -> repair
+    -> continue causal pressure
+    -> ONLY AROUND THE 30-MINUTE BOUNDARY persist final handoff
+
+Do not hand off early after:
+- regenerating validation evidence;
+- getting CI-equivalent local validation green;
+- re-proving apk --version;
+- identifying the memset producer;
+- repairing one apk-info blocker;
+- making one new apk command succeed.
+
+If QEMU or another required host pressure tool is unexpectedly missing, treat that as an infrastructure problem to diagnose/restore during the useful window, not as automatic permission for an early handoff.
+
+PERSISTENCE / FINAL HANDOFF
+
+Only near the end of the useful ~30-minute slice, persist:
+
+  docs/reports/AGENTIC_SNOWBALL_BATCH_32V.md
+
+The report must include:
+
+- exact starting main SHA
+- confirmation of inherited PR #98 merge checkpoint
+- exact validation-evidence files regenerated
+- exact validation commands/results
+- confirmation whether `zig build check` is green
+- exact real-QEMU `/sbin/apk --version` result
+- `/sbin/apk --help` result
+- every unchanged `apk info` retry and observed frontier
+- causal diagnosis of the 0x8 memset destination if found
+- mechanisms admitted and focused tests
+- Playable Alpine re-proof result
+- files changed
+- final implementation commit SHA
+- exactly one next causal blocker if incomplete
+
+Do not claim package-manager functionality that was not directly observed.
+Do not claim green CI solely from local commands; record what was actually run and leave the pushed branch suitable for GitHub validation.
+
+BEGIN.

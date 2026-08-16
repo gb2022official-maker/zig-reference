@@ -1,0 +1,291 @@
+CODEX AGENTIC SNOWBALL — BATCH 32X
+SV39 FOREIGN-BRANCH FIX -> REAL APK LADDER -> MAXIMUM CAUSAL PROGRESS
+FULL USEFUL ~30-MINUTE WINDOW -> FINAL HANDOFF
+
+Repository: gb2022official-maker/zig-reference
+Start from current main.
+Inherited checkpoint: merged PR #1 / commit 0fa765af8f1356d18ab5d0104a528d29a1c1817c.
+Do not restart from the older 584-page startup frontier; Batch 32W already resolved the startup stack-overwrite problem and restored external execution.
+
+MISSION
+
+This is an implementation + real-QEMU pressure run, not a diagnosis-only run and not a one-bug batch.
+
+Primary target:
+
+    push unchanged real Alpine v3.22.0 RV64 `apk info` as far as causally possible,
+    with `apk info` completion as the immediate major milestone.
+
+Use the FULL useful approximately 30-minute engineering window.
+
+The most important rule of this batch is CONTINUOUS SNOWBALL PROGRESS:
+
+    when a blocker is solved, DO NOT STOP.
+    rebuild;
+    rerun the real workload;
+    observe the next blocker;
+    solve that blocker;
+    rerun again;
+    repeat for the entire useful window.
+
+A single successful fix is not the end of the batch.
+`apk --version` success is not the end.
+`apk --help` success is not the end.
+`apk info` success is not the end if useful time remains.
+
+Only the approximately 30-minute boundary ends engineering work. The FINAL HANDOFF is produced at that boundary.
+
+CURRENT FRONTIER
+
+Batch 32W handoff established:
+
+- the enlarged 584-page machine had a supervisor-stack overflow caused by capacity-sized `PreparedImage` metadata being inlined into a large startup frame;
+- the general repair moved external execution into an explicit non-inlined phase and placed capacity-sized PREPARE metadata in bounded global candidate slots;
+- real QEMU then reached external namespace lookup, PREPARE, COMMIT, and execute;
+- the immediate unchanged `/sbin/apk --version` retry reached a later Sv39 failure;
+- the failing path was `RealPageOwner.owns()` / `RealPageOwner.read`;
+- `stval` was `0x4001b148`, corresponding to user virtual page `0x4001b000` being treated as a page-table frame;
+- the exact 32W handoff identified the causal frontier as the page-table state transition that installs/corrupts the branch PTE causing that interpretation.
+
+The merged PR #1 / commit 0fa765af8f1356d18ab5d0104a528d29a1c1817c then added a general ownership predicate and Sv39 `requireOwnedBranch()` guards so `mapPage`, `unmapPage`, and `protect` reject foreign branch PTE targets instead of descending into them. It also added a focused regression proving foreign branch PTEs are rejected.
+
+The PR's immediate post-fix evidence reported that the previous `ZIGREF_LINUX_EDGE_TRAP` no longer appeared in the captured tail, while the real apk ladder still had further causal work.
+
+Do NOT assume that means the whole Sv39 problem is solved. The job now is to rerun the real workload and let it expose the next first blocker.
+
+PHASE A — QUICK ENVIRONMENT + CHECKPOINT PROOF
+
+Record:
+
+    git rev-parse HEAD
+    git status --short
+    zig version
+    command -v qemu-system-riscv64
+    qemu-system-riscv64 --version
+
+Confirm HEAD contains the merged foreign-branch fix.
+
+Do not spend the window re-auditing unrelated history.
+
+PHASE B — REPRODUCE THE REAL APK LADDER IMMEDIATELY
+
+Use the canonical unchanged Alpine v3.22.0 RV64 environment and the project's real QEMU/Morphic execution path.
+
+Run in order:
+
+    /sbin/apk --version
+    /sbin/apk --help
+    apk info
+
+Capture exact output and the FIRST failure.
+
+Do not infer that a command works because an earlier run worked.
+
+The real workload is the authority.
+
+PHASE C — CAUSAL SNOWBALL LOOP
+
+From the first observed failure, perform this loop continuously:
+
+    1. Reproduce the exact failure.
+    2. Identify the first observable invariant violation.
+    3. Trace backward to the earliest incorrect producer/state transition you can establish from evidence.
+    4. Implement the smallest GENERAL bounded repair.
+    5. Add focused regression/proof when practical.
+    6. Run focused tests.
+    7. Rebuild the real freestanding/QEMU artifact.
+    8. Immediately rerun the SAME real Alpine workload.
+    9. Record how far it advanced.
+   10. If another blocker appears, start the loop again immediately.
+
+Do not stop after step 4, 5, or 8 merely because one bug disappeared.
+
+The desired behavior is explicitly:
+
+    blocker A
+      -> fix A
+      -> real apk retry
+      -> blocker B
+      -> fix B
+      -> real apk retry
+      -> blocker C
+      -> fix C
+      -> real apk retry
+      -> ...
+      -> continue until the ~30-minute boundary
+      -> final handoff
+
+Do not batch speculative fixes for imagined future failures.
+Do not guess a syscall list in advance.
+Do not implement unrelated features while the real workload has a concrete blocker.
+
+PHASE D — WHAT COUNTS AS A GENERAL FIX
+
+Prefer the smallest mechanism that explains the observed failure while preserving existing contracts.
+
+Potential blocker classes include, only when the real trace points there:
+
+- Sv39/page-table construction or ownership;
+- virtual/physical address identity;
+- PTE construction or branch traversal;
+- mmap/munmap/protect semantics;
+- anonymous or file-backed memory;
+- fork/exec address-space state;
+- FD/resource lifecycle;
+- filesystem/path/metadata semantics;
+- process state;
+- signals/time/threading;
+- missing Linux/RV64 syscall semantics;
+- deterministic errno behavior;
+- dynamic loader or musl interaction.
+
+If a syscall is genuinely the first blocker, implement the smallest general Linux/RV64 contract required by the observed call.
+
+Do NOT special-case:
+
+- `apk`;
+- musl;
+- one PC;
+- `0x4001b000`;
+- one address;
+- one pathname;
+- one binary;
+- one syscall sequence.
+
+Do not weaken ownership checks merely to make a fault disappear.
+Do not convert user virtual addresses into physical page-table addresses by assumption.
+Do not patch symptoms when the producer can be identified.
+
+Preserve:
+
+- PREPARE -> COMMIT;
+- failure atomicity / rollback;
+- W+X = 0;
+- SUM discipline;
+- bounded ownership/resource classes;
+- canonical Alpine source identity;
+- exact FD/resource ownership and shared-position semantics;
+- fork/private-file state correctness;
+- parent shell liveness;
+- deterministic Linux errno;
+- previously earned Playable Alpine behavior.
+
+PHASE E — APK MILESTONE ESCALATION
+
+The immediate ladder is:
+
+    /sbin/apk --version
+        -> /sbin/apk --help
+        -> apk info
+
+When one succeeds, immediately continue to the next.
+
+If `apk info` succeeds, preserve the exact output and CONTINUE for the remaining useful time.
+
+After `apk info` success, prefer stronger REAL LOCAL apk/package-database behavior without inventing network prerequisites:
+
+1. repeat `apk info` to prove persistence;
+2. query installed package metadata/local database through ordinary apk commands;
+3. exercise another read-only local apk query exposed by `apk --help`;
+4. if a real local `.apk` artifact already exists in the canonical environment, pressure local package inspection/install semantics;
+5. otherwise use the strongest next genuinely reachable local apk behavior.
+
+Do not fabricate package artifacts merely to claim package installation.
+
+If local package mutation becomes the next real frontier, let that workload expose the next required kernel behavior and continue the same causal loop.
+
+PHASE F — PLAYABLE ALPINE REGRESSION FLOOR
+
+Runtime progress must not silently regress the existing shell contract.
+
+Before final handoff, re-prove a persistent real Alpine shell with:
+
+    echo morphic
+    echo second
+    pwd
+    ls /
+    cat /etc/alpine-release
+    cd /tmp
+    pwd
+    echo hello > /tmp/hello
+    cat /tmp/hello
+    echo hello | cat
+    echo still-alive
+
+A stronger apk milestone does not count as clean if the persistent shell regresses.
+
+VALIDATION
+
+For each admitted mechanism, run focused tests before returning to the real workload.
+
+At minimum preserve:
+
+    zig build test-recipe-run-hosted-morphic-runtime
+    zig build check
+
+and the repository's canonical validation/evidence/index/command-reference checks used by the project.
+
+Do not spend disproportionate time on broad validation while a concrete real-workload blocker remains, but do not leave the final handoff without recording validation status.
+
+30-MINUTE TIME CONTRACT
+
+Start the engineering timer when the first real workload reproduction/build sequence begins.
+
+Use the entire useful ~30-minute slice for causal progress.
+
+The following are NOT reasons to stop early:
+
+- one bug was fixed;
+- the Sv39 foreign-branch trap disappeared;
+- `/sbin/apk --version` works;
+- `/sbin/apk --help` works;
+- `apk info` works;
+- a local package query works;
+- a focused test passes;
+- a build passes.
+
+Whenever any of those happens with useful time remaining, immediately move to the next real workload pressure point.
+
+At approximately 30 minutes, STOP ENGINEERING and perform the final handoff persistence.
+
+FINAL HANDOFF — AT THE END OF THE ~30 MINUTES
+
+Create/update:
+
+    docs/reports/AGENTIC_SNOWBALL_BATCH_32X.md
+
+The handoff must be the final activity of the run and must contain:
+
+- exact starting commit;
+- exact final commit;
+- Zig/QEMU versions;
+- exact initial post-PR#1 apk reproduction;
+- each meaningful blocker encountered in order;
+- first causal producer identified for each blocker;
+- mechanism changed for each fix;
+- focused tests/proofs for each admitted mechanism;
+- every meaningful unchanged `apk` retry and how far it advanced;
+- exact `/sbin/apk --version` result;
+- exact `/sbin/apk --help` result;
+- exact `apk info` result;
+- any stronger local apk behavior reached after `apk info`;
+- Playable Alpine regression result;
+- canonical validation result;
+- concise statement of what is now proven versus not proven;
+- exactly ONE next causal blocker if the larger goal remains incomplete.
+
+If `apk info` succeeds, say so plainly and preserve exact evidence.
+If it does not, do not imply package-database success.
+
+The next agent must be able to start from this handoff without rediscovering the previous run.
+
+FINAL OPERATING RULE
+
+MAXIMIZE CAUSAL PROGRESS.
+
+Never interpret “the problem is solved” as “the 30-minute run is over.”
+A solved problem is the signal to immediately run the real workload again and discover the next problem.
+
+Only the time boundary ends the engineering loop.
+
+Begin.

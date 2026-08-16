@@ -145,3 +145,29 @@ Do not collapse all failures into one number. The point is to learn whether the 
 **Checkpoint decision:** do **not** merge the Batch 32S file-mmap PR until both semantic defects are repaired with focused permanent regressions and the full validation workflow remains green. Keep the measured 950-page libcrypto private-backing capacity requirement as the next causal apk frontier; do not mix that capacity expansion into this correctness cleanup.
 
 **Corrective action:** add explicit planner invariants for EOF/page-boundary behavior and representable protection modes; add regressions proving no wholly-past-EOF readable pages are admitted and that `PROT_NONE`/write-only requests receive the chosen deterministic policy before mapping mutation; preserve the current rollback/ownership tests and Playable Alpine gate; then rerun the unchanged real `/sbin/apk --version` only after the merge-clean correctness repair.
+
+## Entry 2026-08-15 — Batch 32T PR #97 private mmap fork/restore ownership defect
+
+**Request / plan:** Batch 32T, `docs/plans/CODEX_AGENTIC_SNOWBALL_BATCH_32T_MMAP_SEMANTICS_TO_APK_VERSION_MAXIMUM_CAUSAL_PROGRESS_FULL_30MIN_BEFORE_HANDOFF.txt`, repaired the inherited mmap semantics and then repeatedly pressured the unchanged real Alpine `/sbin/apk --version` under QEMU.
+
+**Pull request:** PR #97, `fix: bound file-backed MAP_PRIVATE EOF/protection semantics and add private-file backing pool`.
+
+**Merged checkpoint:** PR #97 was intentionally merged to advance the project at merge commit `cf87c3b8b5b8b32609cea2d30636aad69a9aacfb`, from PR head `5bcf7ce2a536bfdde5b4d5798351dea6ceb49703`. The merge message explicitly records the known defect and hands it to the next Codex run; this merge is not a claim that fork/clone restoration is correct.
+
+**Review location:** Codex inline review comment `3790537879` on `recipes/run-hosted-morphic-runtime/src/freestanding_riscv64.zig` (review `4944974587`).
+
+**Useful progress preserved by the checkpoint:** QEMU-capable continuation crossed the corrected file-backed EOF reservation semantics, exact `MAP_PRIVATE|MAP_FIXED` replacement for loader segments, and Linux/RV64 `munmap(215)`. The runtime mapping-table bound rose from 8 to 16, private-file backing from 1,024 to 2,048 pages, Playable Alpine was re-proved, and the unchanged apk frontier advanced to a deterministic first `libcrypto` `ENOMEM` while the separate relative `libz.so.1` `ENOENT` remained downstream.
+
+**Observed defect:** file-backed private pages now live in `external_private_file_backing`, with a separate allocation cursor, but the supported fork-shaped `clone` parent snapshot/restore path still snapshots the old prepared backing state and cursor. When a dynamically linked parent forks, the child may `execve`, which resets/reuses the private-file pool. On child termination, the parent runtime mappings can then be restored from the wrong backing class or overwritten bytes. The mapping topology may look valid while the parent's shared-library contents are silently wrong.
+
+**Why this matters:** this is a process-lifetime ownership defect, not merely a capacity issue. A compatibility layer must preserve the bytes and backing identity of the parent's mappings across the supported fork/child-exec/parent-restore cycle. Passing loader startup and Playable Alpine does not prove that invariant because the acceptance sequence does not exercise a dynamically linked parent carrying private file mappings through that lifecycle.
+
+**Attribution:** **agent execution failure**.
+
+**Confidence:** high.
+
+**Why:** the Batch 32T implementation introduced a second backing class without extending the already-supported process snapshot/restore contract to carry that backing class and cursor. No platform limitation forced the omission. Automated review identified the mismatch directly in persisted runtime state management.
+
+**Checkpoint decision:** intentionally merge PR #97 as an annotated causal-progress checkpoint at `cf87c3b8b5b8b32609cea2d30636aad69a9aacfb`, then hand the known ownership defect to the next fresh Codex run. The next run must repair and prove backing-class-aware snapshot/restore first, then immediately resume real `/sbin/apk --version` pressure instead of treating the cleanup as the endpoint.
+
+**Corrective action:** represent enough backing identity in runtime mappings or process snapshots to distinguish prepared-image backing from private-file backing; snapshot and restore the private pool plus cursor across fork-shaped clone; add a focused regression where a parent with file-backed private mappings forks, the child execs/exits, and the parent resumes with byte-identical mappings; re-prove Playable Alpine; then rerun unchanged `/sbin/apk --version` and continue causal repairs through the full useful ~30-minute slice before final handoff.

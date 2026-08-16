@@ -39,6 +39,14 @@ pub fn BoundedRuntimeMappings(comptime capacity: usize, comptime page_size: usiz
             return length / page_size;
         }
 
+        /// Linux mmap byte lengths cover every touched page. Return the
+        /// checked page-aligned ownership length for that ABI boundary.
+        pub fn roundedLength(length: usize) Error!usize {
+            if (length == 0) return error.InvalidRange;
+            const with_tail = std.math.add(usize, length, page_size - 1) catch return error.InvalidRange;
+            return with_tail & ~(page_size - 1);
+        }
+
         /// A reservation with no access permissions intentionally owns virtual
         /// address space without consuming or installing data-page backing.
         pub fn hasBacking(mapping: Mapping) bool {
@@ -288,6 +296,14 @@ test "multi-page reservation is contiguous and rollback restores capacity" {
     try table.reserve(0x9000, 4096, .{}, false, {}, neverOccupied);
 }
 
+test "Linux byte lengths round to complete bounded pages" {
+    const Table = BoundedRuntimeMappings(1, 4096);
+    try std.testing.expectEqual(@as(usize, 4096), try Table.roundedLength(1));
+    try std.testing.expectEqual(@as(usize, 0x28000), try Table.roundedLength(0x2711c));
+    try std.testing.expectError(error.InvalidRange, Table.roundedLength(0));
+    try std.testing.expectError(error.InvalidRange, Table.roundedLength(std.math.maxInt(usize)));
+}
+
 test "collision on the second page rejects the whole range" {
     const occupied = struct {
         fn check(_: void, page: usize) bool {
@@ -360,4 +376,13 @@ test "protection split retains backing offsets" {
     try std.testing.expectEqual(@as(usize, 5), table.entries[1].backing_start);
     try std.testing.expect(!table.entries[1].permissions.write);
     try std.testing.expectEqual(@as(usize, 6), table.entries[2].backing_start);
+}
+
+test "bounded apk-sized topology admits the thirty-third mapping" {
+    const Table = BoundedRuntimeMappings(64, 4096);
+    var table: Table = .{};
+    for (0..33) |index|
+        try table.reserve(0x1000 + index * 0x2000, 0x1000, .{ .read = true }, false, {}, neverOccupied);
+    try std.testing.expectEqual(@as(usize, 33), table.count);
+    try std.testing.expect(table.containsRange(0x41000, 0x1000));
 }

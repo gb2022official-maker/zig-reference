@@ -249,6 +249,18 @@ pub fn build(b: *std.Build) void {
                 .optimize = optimize,
             }) });
             recipe_step.dependOn(&b.addRunArtifact(runtime_mapping_tests).step);
+            const mapping_replacement_tests = b.addTest(.{ .root_module = b.createModule(.{
+                .root_source_file = b.path("recipes/run-hosted-morphic-runtime/src/bounded_mapping_replacement.zig"),
+                .target = target,
+                .optimize = optimize,
+            }) });
+            recipe_step.dependOn(&b.addRunArtifact(mapping_replacement_tests).step);
+            const fork_private_backing_tests = b.addTest(.{ .root_module = b.createModule(.{
+                .root_source_file = b.path("recipes/run-hosted-morphic-runtime/src/bounded_fork_private_backing.zig"),
+                .target = target,
+                .optimize = optimize,
+            }) });
+            recipe_step.dependOn(&b.addRunArtifact(fork_private_backing_tests).step);
             const syscall_evidence_tests = b.addTest(.{ .root_module = b.createModule(.{
                 .root_source_file = b.path("recipes/run-hosted-morphic-runtime/src/bounded_syscall_evidence.zig"),
                 .target = target,

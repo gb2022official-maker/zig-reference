@@ -70,7 +70,7 @@ SECTIONS {
 
   /* Caller-provided ELF bytes are transport input, not part of the ordinary
      kernel image. The fixed reservation is bounded and mapped supervisor-RO. */
-  . = 0x82000000;
+  . = 0x83000000;
   .caller_artifact : ALIGN(4096) {
     __caller_artifact_begin = .;
     KEEP(*(.caller_artifact))

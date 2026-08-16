@@ -80,6 +80,7 @@ pub fn resolve(manifest: []const u8, guest_path: []const u8, follow_final_symlin
     if (!validAbsolutePath(guest_path)) return error.InvalidPath;
     var path = guest_path;
     var traversals: usize = 0;
+    var resolved_paths: [max_symlink_traversals][256]u8 = undefined;
     while (true) {
         const found = try find(manifest, path);
         const target = found.target orelse {
@@ -89,9 +90,43 @@ pub fn resolve(manifest: []const u8, guest_path: []const u8, follow_final_symlin
         };
         if (!follow_final_symlink) return error.FinalSymlink;
         if (traversals == max_symlink_traversals) return error.TraversalLimit;
-        if (!validAbsolutePath(target)) return error.InvalidPath;
+        if (target.len == 0) return error.InvalidPath;
+        var next_path = target;
+        if (target[0] != '/') {
+            var output = &resolved_paths[traversals];
+            const slash = std.mem.lastIndexOfScalar(u8, path, '/') orelse return error.InvalidPath;
+            var used: usize = 0;
+            if (slash == 0) {
+                output[0] = '/';
+                used = 1;
+            } else {
+                if (slash >= output.len) return error.InvalidPath;
+                @memcpy(output[0..slash], path[0..slash]);
+                used = slash;
+            }
+            var components = std.mem.splitScalar(u8, target, '/');
+            while (components.next()) |component| {
+                if (component.len == 0 or std.mem.eql(u8, component, ".")) continue;
+                if (std.mem.eql(u8, component, "..")) {
+                    if (used == 1) return error.InvalidPath;
+                    used = std.mem.lastIndexOfScalar(u8, output[0..used], '/') orelse return error.InvalidPath;
+                    if (used == 0) used = 1;
+                    continue;
+                }
+                if (used != 1) {
+                    if (used == output.len) return error.InvalidPath;
+                    output[used] = '/';
+                    used += 1;
+                }
+                if (component.len > output.len - used) return error.InvalidPath;
+                @memcpy(output[used..][0..component.len], component);
+                used += component.len;
+            }
+            next_path = output[0..used];
+        }
+        if (!validAbsolutePath(next_path)) return error.InvalidPath;
         traversals += 1;
-        path = target;
+        path = next_path;
     }
 }
 
@@ -130,4 +165,15 @@ test "root directory remains directly openable" {
     const object = try resolve(fixture, "/", true);
     try std.testing.expectEqual(Kind.directory, object.kind);
     try std.testing.expectEqual(@as(usize, 0), object.traversals);
+}
+
+test "relative final symlink resolves within its parent with bounded dot-dot" {
+    const relative_fixture =
+        "{\"path\":\"/usr/lib/real.so\",\"kind\":\"regular\",\"data_offset\":9,\"data_length\":3}," ++
+        "{\"path\":\"/usr/lib/link.so\",\"kind\":\"symlink\",\"target\":\"./real.so\"}," ++
+        "{\"path\":\"/usr/up.so\",\"kind\":\"symlink\",\"target\":\"lib/real.so\"}";
+    const direct = try resolve(relative_fixture, "/usr/lib/link.so", true);
+    try std.testing.expectEqual(@as(usize, 9), direct.data_offset);
+    const nested = try resolve(relative_fixture, "/usr/up.so", true);
+    try std.testing.expectEqual(@as(usize, 9), nested.data_offset);
 }

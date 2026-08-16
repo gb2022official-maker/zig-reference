@@ -243,7 +243,10 @@ fn RealPageOwner(comptime Allocator: type) type {
             entries[index] = value;
         }
 
-        fn owns(self: *const Self, address: u64) bool {
+        pub fn owns(self: *const Self, address: u64) bool {
+            const reserved_begin = @intFromPtr(&prepared_table_backing[0]);
+            const reserved_end = reserved_begin + @sizeOf(@TypeOf(prepared_table_backing));
+            if (!(address >= reserved_begin and address < reserved_end) and address < 0x8000_0000) return false;
             for (self.pages[0..self.page_count]) |page| if (page == address) return true;
             return false;
         }

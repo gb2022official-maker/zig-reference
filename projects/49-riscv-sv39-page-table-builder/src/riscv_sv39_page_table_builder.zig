@@ -10,6 +10,9 @@ pub fn Builder(comptime Owner: type) type {
         const Self = @This();
         owner: *Owner,
         root: u64,
+        fn requireOwnedBranch(self: *Self, address: u64) Error!void {
+            if (@hasDecl(Owner, "owns") and !self.owner.owns(address)) return error.MalformedMapping;
+        }
         pub fn init(owner: *Owner) Error!Self {
             return .{ .owner = owner, .root = owner.allocate() catch return error.OutOfPages };
         }
@@ -55,6 +58,7 @@ pub fn Builder(comptime Owner: type) type {
                 } else {
                     const e = pte.Entry.decode(raw) catch return error.MalformedMapping;
                     if (e.kind() != .branch) return error.Conflict;
+                    try self.requireOwnedBranch(e.address());
                     frame = e.address();
                 }
             }
@@ -94,6 +98,7 @@ pub fn Builder(comptime Owner: type) type {
                     return .{ .invalidation = inv.forAddress(v) };
                 }
                 if (e.kind() != .branch) return error.Conflict;
+                try self.requireOwnedBranch(e.address());
                 frame = e.address();
             }
             return error.MissingMapping;
@@ -120,6 +125,7 @@ pub fn Builder(comptime Owner: type) type {
                     return .{ .invalidation = inv.forAddress(v) };
                 }
                 if (old.kind() != .branch) return error.Conflict;
+                try self.requireOwnedBranch(old.address());
                 frame = old.address();
             }
             return error.MissingMapping;
@@ -163,4 +169,15 @@ test "map query conflict unmap and atomic allocation failure" {
     const before = tiny.count();
     try std.testing.expectError(error.OutOfPages, x.mapPage(0, 0, .page_4k, .{ .read = true }));
     try std.testing.expectEqual(before, tiny.count());
+}
+
+test "builder rejects a branch that does not name an owned page-table frame" {
+    const O = @import("riscv-page-table-page-owner").PageOwner(2);
+    var o = O{};
+    var b = try Builder(O).init(&o);
+    const foreign_branch = try pte.Entry.branch(0x4001b000);
+    try o.write(b.root, 0, foreign_branch.raw);
+    try std.testing.expectError(error.MalformedMapping, b.mapPage(0, 0x8000, .page_4k, .{ .read = true }));
+    try std.testing.expectError(error.MalformedMapping, b.unmapPage(0, .page_4k));
+    try std.testing.expectError(error.MalformedMapping, b.protect(0, .page_4k, .{ .read = true }));
 }

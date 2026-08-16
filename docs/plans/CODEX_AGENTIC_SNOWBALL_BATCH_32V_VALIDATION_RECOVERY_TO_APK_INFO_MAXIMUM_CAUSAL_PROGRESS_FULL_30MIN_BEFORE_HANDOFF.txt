@@ -1,72 +1,161 @@
 # CODEX AGENTIC SNOWBALL — BATCH 32V
-# Validation recovery -> real apk info maximum causal progress
-# Full useful ~30-minute implementation window; handoff is the final action
+# GREEN VALIDATION -> APK INFO SUCCESS -> MAXIMUM REAL APK PROGRESS
+# USE THE FULL USEFUL ~30-MINUTE ENGINEERING WINDOW; HANDOFF ONLY AFTERWARD
 
 Repository: thanks-cohn/zig-reference
-Start point: current main
+Starting branch: current main
 
-Historical checkpoint carried forward:
-- PR #98
-- PR head: 08ed237f00923bb915babe0d48ff310e3a16ac5c
-- merge commit: 2bbe272e4b3b3ded824bd3d3a64b60be0f267b1f
-- GitHub validate run: 31926416535
-- failed job: 95114607166
+This plan supersedes the earlier Batch 32V text.
 
-PR #98 was intentionally merged to preserve major runtime progress despite one known repository-validation debt. The merge is not a green-CI claim.
+MISSION
 
-EARNED STATE THAT MUST NOT BE REGRESSED
+Use the full useful ~30-minute engineering window to turn the current real Alpine `apk info` crash into the strongest real apk success the evidence allows.
 
-- canonical Alpine v3.22.0 RV64 remains Playable under Morphic
-- persistent shell gate passed
-- fork/private-file mmap backing identity and snapshot/restore were repaired
-- PROT_NONE mprotect transitions were repaired to be backing-aware
-- fixed-anonymous replacement was made failure-atomic
-- /sbin/apk --version succeeds and prints:
-  apk-tools 2.14.9, compiled for riscv64
-- /sbin/apk --help reaches real apk execution/output
-- fresh apk info reaches dependency loading + RELRO and then faults in musl memset around:
-  PC 0x4004df9a
-  store address 0x8
+The desired outcome is not merely diagnosis and not merely another isolated syscall repair.
 
-FIRST REQUIRED ACTION — CLOSE THE KNOWN RED VALIDATION DEBT
+Primary success target:
 
-The authoritative GitHub failure was:
+  `apk info` completes successfully under the unchanged real Alpine v3.22.0 RV64 userspace.
+
+If that is achieved before the useful ~30-minute window is over, immediately continue into progressively stronger real local apk/package-manager operations. Keep running, repairing, and retrying real apk behavior until the ~30-minute engineering window is actually consumed. Only then perform the final persisted handoff.
+
+The opening validation cleanup is mandatory, but it is only an entry gate. Do not let validation consume the batch once it is green.
+
+The governing loop is:
+
+  observe real failure
+    -> identify the first causal producer
+    -> implement the smallest general bounded repair
+    -> add focused permanent proof
+    -> rebuild the real machine
+    -> rerun the exact apk workload immediately
+    -> repeat
+
+Do not guess future blockers.
+Do not accumulate speculative Linux features.
+Do not special-case apk, musl, libapk, libcrypto, paths, descriptors, virtual addresses, package names, or exact library names.
+Do not treat one repaired problem as completion.
+
+======================================================================
+HISTORICAL CHECKPOINT
+======================================================================
+
+PR #98 was intentionally merged as a runtime-progress checkpoint.
+
+PR #98 head:
+  08ed237f00923bb915babe0d48ff310e3a16ac5c
+
+PR #98 merge commit:
+  2bbe272e4b3b3ded824bd3d3a64b60be0f267b1f
+
+GitHub validate run:
+  31926416535
+
+Failed job:
+  95114607166
+
+The authoritative validation failure was:
 
   validation evidence error: fixed-capacity-vector: stale source digest; regenerate validation evidence
 
-from `zig build check` / `tools/record-validation.py --check`.
+from:
 
-This is deterministic repository-owned derived evidence. Do not weaken or bypass the check.
+  zig build check
+  -> tools/record-validation.py --check
+
+This red state was explicitly recorded in the research failure ledger. It is repository-owned derived evidence debt, not evidence that the earned real apk runtime milestone failed.
+
+======================================================================
+EARNED STATE — DO NOT REGRESS
+======================================================================
+
+The following are already earned and must remain true:
+
+- exact Alpine v3.22.0 RV64 namespace under Morphic;
+- 517 namespace objects;
+- unchanged dynamic musl/BusyBox userspace;
+- persistent real Alpine shell;
+- cwd, directory enumeration, immutable reads, bounded writes, descriptor replacement, external BusyBox reads, and pipelines;
+- file-backed MAP_PRIVATE for the loader-observed bounded slice;
+- MAP_FIXED file replacement for observed loader mappings;
+- munmap(215) for runtime-owned mappings;
+- backing-class-aware runtime mapping identity and offsets;
+- fork-shaped parent snapshot/restore of private-file mapping bytes and cursor;
+- bounded relative final-symlink resolution sufficient to resolve the observed `libz.so.1` layout;
+- owned-page mprotect/RELRO support for the admitted slice;
+- backing-aware PROT_NONE transitions;
+- failure-atomic fixed anonymous replacement;
+- W+X=0;
+- PREPARE -> COMMIT discipline;
+- parent-shell liveness after the canonical Playable Alpine workload.
+
+Real QEMU already proved:
+
+  /sbin/apk --version
+
+prints:
+
+  apk-tools 2.14.9, compiled for riscv64
+
+Real:
+
+  /sbin/apk --help
+
+reaches apk execution/output.
+
+Fresh real:
+
+  apk info
+
+crosses the real dynamic dependency loads and RELRO, then currently faults in musl `memset` around:
+
+  PC 0x4004df9a
+  store destination 0x8
+
+The null-derived destination is the current real causal frontier.
+
+======================================================================
+PHASE 1 — CLOSE THE KNOWN RED VALIDATION DEBT QUICKLY AND CORRECTLY
+======================================================================
 
 From current main:
 
-1. identify the repository's canonical validation-evidence regeneration command/tooling;
-2. regenerate only the required canonical evidence;
-3. persist every required generated/evidence file;
-4. run at minimum:
-   - zig fmt --check build.zig projects recipes conformance
-   - zig build check
-   - python3 tools/developer-command.py validate-repository
-   - PYTHONDONTWRITEBYTECODE=1 python3 tools/check-command-reference.py --check
-   - git diff --check
-5. if validation exposes another deterministic generated-state issue, repair it generally and rerun the same gate;
-6. do not spend the entire run polishing validation once the repository is green.
+1. Determine the repository's canonical validation-evidence regeneration path.
+2. Regenerate the stale `fixed-capacity-vector` evidence using repository tooling.
+3. Persist every repository-owned generated/evidence file that the canonical tool updates.
+4. Do not weaken, skip, bypass, or rewrite validation to make the error disappear.
+5. Run at minimum:
 
-AS SOON AS VALIDATION IS GREEN, IMMEDIATELY RETURN TO REAL APK PRESSURE.
+   zig fmt --check build.zig projects recipes conformance
+   zig build check
+   python3 tools/developer-command.py validate-repository
+   PYTHONDONTWRITEBYTECODE=1 python3 tools/check-command-reference.py --check
+   git diff --check
 
-Do not stop because the inherited red gate was repaired.
-Do not enter handoff mode merely because `zig build check` becomes green.
-The validation repair is the opening gate, not the goal of Batch 32V.
+6. If another deterministic generated-state inconsistency appears, repair that exact generated state and rerun the same gate.
+7. Once the repository is green locally, leave validation alone unless later runtime changes make regeneration necessary again.
 
-REAL QEMU CAUSAL LOOP
+Important:
 
-Verify infrastructure first if needed:
+GREEN VALIDATION IS NOT THE END OF THIS RUN.
+
+The moment the inherited validation debt is closed, immediately pivot to real QEMU apk pressure.
+
+======================================================================
+PHASE 2 — REPROVE THE EARNED APK LADDER
+======================================================================
+
+Verify the pressure environment:
 
   zig version
   command -v qemu-system-riscv64
   qemu-system-riscv64 --version
 
-Then rebuild the exact canonical namespace-backed Alpine machine and re-prove:
+If a required host pressure tool is unexpectedly unavailable, treat that as an infrastructure defect to restore during the useful working window. Missing host tooling is not permission for an early handoff.
+
+Regenerate/reuse the exact canonical Alpine v3.22.0 RV64 namespace through the repository's documented tooling and rebuild the namespace-backed Morphic machine.
+
+Then run real QEMU and re-prove, in order:
 
   /sbin/apk --version
 
@@ -74,58 +163,131 @@ Expected earned output:
 
   apk-tools 2.14.9, compiled for riscv64
 
-Then immediately run:
+Then:
 
   /sbin/apk --help
 
-and then the primary pressure command:
+Then make the main pressure workload:
 
   apk info
 
-The currently observed first causal frontier is the fresh `apk info` musl `memset` fault with a null-derived destination around `0x8` at PC `0x4004df9a`.
+Do not skip directly to speculative implementation before reproducing the real current fault.
 
-Do not patch musl memset itself.
-Do not special-case apk, libapk, libcrypto, paths, descriptors, addresses, or package names.
-Do not guess which subsystem is wrong.
+======================================================================
+PHASE 3 — ROOT-CAUSE THE APK INFO MEMSET 0x8 FAULT
+======================================================================
 
-Trace backward from the real fault to identify the first producer of the invalid/null-derived destination. Determine whether it comes from process state, memory-map topology/backing, brk/heap state, TLS/thread state, syscall return semantics, resource ownership, parent restoration, or another directly evidenced mechanism.
+The current evidence is a musl `memset` store fault with a null-derived destination near `0x8` at PC approximately `0x4004df9a` after dependency loading and RELRO.
 
-For every causal repair:
+Do not patch `memset`.
+Do not add a null guard to musl behavior.
+Do not special-case the faulting PC or destination.
 
-  observe exact real failure
-    -> classify the first bad producer
-    -> implement the smallest general bounded mechanism
-    -> add focused permanent proof
-    -> rebuild the exact real machine
-    -> rerun unchanged `apk info` immediately
+Trace backward until you can name the earliest state transition that made the later `memset` destination invalid.
 
-Continue this loop through as many directly exposed blockers as the useful working window permits.
+Possible classes include, but are not limited to:
 
-If `apk info` succeeds, continue immediately into the next local apk/package-database operation exposed by the real Alpine environment. Prefer real package-manager behavior over synthetic feature accumulation.
+- incorrect brk/heap contract;
+- anonymous mmap result/placement semantics;
+- runtime mapping topology corruption;
+- backing-class or backing-offset corruption;
+- child/parent restoration corruption;
+- initial process state;
+- TLS/thread-pointer state;
+- set_tid_address or closely related thread startup semantics;
+- signal-state interaction;
+- syscall return-value/errno mismatch;
+- loader-visible metadata corruption;
+- allocator contract violation;
+- stale pointer caused by a mapping replacement/release defect.
 
-If a repaired blocker exposes a different real failure than the historical memset fault, follow the new observed frontier rather than forcing the old hypothesis.
+These are hypotheses only. Follow trace evidence rather than the list.
 
+Instrument narrowly if necessary. Any temporary debug instrumentation must be either removed before final persistence or deliberately retained only if it conforms to the repository's trace/diagnostic contract and has lasting research value.
+
+The repair must be the smallest general mechanism that explains the actual fault and improves Linux compatibility beyond apk itself.
+
+Add a focused permanent regression that would have failed before the repair and now protects the causal invariant.
+
+Then immediately rebuild and rerun unchanged:
+
+  apk info
+
+======================================================================
+MANDATORY CAUSAL SNOWBALL AFTER EVERY REPAIR
+======================================================================
+
+Every time a real blocker is repaired:
+
+  1. rebuild immediately;
+  2. rerun the same real apk workload that exposed it;
+  3. if it advances, treat the new observed failure as the next causal frontier;
+  4. classify that frontier;
+  5. implement the smallest general bounded repair;
+  6. add focused proof;
+  7. rerun immediately again.
+
+Do not spend the rest of the slice polishing a solved problem.
+Do not wait for a later batch merely because one meaningful repair succeeded.
+Do not switch to broad architecture work while the real apk workload exposes a narrower causal defect.
+
+The batch is bounded by the useful ~30-minute engineering window, not by a bug count, syscall count, commit count, or feature count.
+
+======================================================================
+APK SUCCESS LADDER — KEEP CLIMBING IF TIME REMAINS
+======================================================================
+
+The desired milestone for this run is a clean successful `apk info` if the causal path can be completed within the useful window.
+
+If `apk info` succeeds before the ~30-minute engineering window is exhausted, immediately continue into stronger real local package-manager behavior.
+
+Use the strongest safe local operations available in the canonical unchanged Alpine artifact, in an evidence-first order such as:
+
+  apk info
+    -> inspect/list installed package metadata through real apk
+    -> real local package-database reads
+    -> help/version/info variants that exercise additional real code paths
+    -> any repository-provided canonical local `.apk` pressure artifact if one already exists
+    -> local verification/extraction/install pressure only when an actual artifact and causal path are available
+
+Do not invent a package artifact or network dependency merely to claim a milestone.
+
+If a canonical local `.apk` artifact is available in the repository or current documented workflow, it is a valid stretch target after `apk info` succeeds. If not, continue strengthening real local database/package-manager behavior rather than fabricating one.
+
+A clean `apk info` success is a major Batch 32V success.
+A real local `.apk` verification/extraction/install success would be an exceptional stretch outcome.
+
+If a higher-level apk command succeeds, continue to the next directly evidenced package-manager operation while useful time remains.
+
+======================================================================
 MANDATORY INVARIANTS
+======================================================================
 
-Preserve throughout:
+Preserve throughout every repair:
 
-- PREPARE -> COMMIT discipline
-- rollback/failure atomicity
-- W+X=0
-- SUM-clear discipline
-- bounded resource pools
-- immutable namespace source bytes
-- descriptor/resource ownership
-- mapping backing identity and offsets
-- fork/child-exec/parent-restore correctness
-- file position preservation where required
-- deterministic Linux errno
-- parent shell liveness
-- no workload-specific special cases
+- PREPARE -> COMMIT;
+- rollback/failure atomicity;
+- W+X=0;
+- SUM clear on guest return;
+- checked arithmetic for guest ranges and page counts;
+- bounded tables and backing pools;
+- immutable source namespace bytes;
+- coherent mapping backing identity and offsets;
+- descriptor/resource ownership;
+- file position preservation where required;
+- fork/child-exec/parent-restore correctness;
+- deterministic Linux errno at the compatibility edge;
+- parent shell liveness;
+- no hidden permanent host dependence;
+- no workload-specific special cases.
 
-PLAYABLE ALPINE SAFETY GATE
+When capacity must grow because real evidence crosses an existing bound, increase only the relevant class-specific bound and document the measured reason. Do not convert bounded designs into unbounded allocation merely to get apk through.
 
-After runtime semantic changes, re-prove in one persistent shell:
+======================================================================
+PLAYABLE ALPINE NON-REGRESSION GATE
+======================================================================
+
+After substantive runtime semantic changes, and again before the final handoff, re-prove the canonical Playable Alpine sequence in one persistent real shell:
 
   echo morphic
   echo second
@@ -139,68 +301,101 @@ After runtime semantic changes, re-prove in one persistent shell:
   echo hello | cat
   echo still-alive
 
-Expected evidence includes:
+Required observed outputs include:
 
   morphic
   second
   /
-  real Alpine root entries
+  genuine Alpine root entries
   3.22.0
   /tmp
   hello
   hello
   still-alive
 
-TIME DISCIPLINE — IMPORTANT
+Do not trade the already-earned Playable Alpine gate for apk progress.
 
-Use the full useful ~30-minute engineering window.
+======================================================================
+TIME DISCIPLINE — HARD REQUIREMENT
+======================================================================
 
-The sequence is:
+Use the full useful ~30-minute engineering window for engineering work and real QEMU pressure.
 
-  validation recovery
-    -> apk --version
-    -> apk --help
-    -> apk info
-    -> repair
-    -> apk info
-    -> repair
-    -> continue causal pressure
-    -> ONLY AROUND THE 30-MINUTE BOUNDARY persist final handoff
+Approximate operating rhythm:
 
-Do not hand off early after:
-- regenerating validation evidence;
-- getting CI-equivalent local validation green;
-- re-proving apk --version;
-- identifying the memset producer;
-- repairing one apk-info blocker;
-- making one new apk command succeed.
+  minute 0:
+    establish visible clock, confirm current main, reproduce validation debt and/or current apk frontier
 
-If QEMU or another required host pressure tool is unexpectedly missing, treat that as an infrastructure problem to diagnose/restore during the useful window, not as automatic permission for an early handoff.
+  minute 0 through approximately minute 30:
+    validation recovery as quickly as justified
+    then continuous implementation + focused tests + real QEMU apk retry loops
 
-PERSISTENCE / FINAL HANDOFF
+  at approximately the 30-minute boundary:
+    only then make final persistence/handoff the primary activity
 
-Only near the end of the useful ~30-minute slice, persist:
+Do not enter handoff/reporting mode early merely because:
+
+- validation becomes green;
+- `apk --version` is re-proved;
+- `apk --help` is re-proved;
+- the `memset` producer is identified;
+- the `memset` producer is repaired;
+- `apk info` succeeds;
+- one new local package-manager operation succeeds;
+- one commit has been made;
+- a particularly satisfying milestone has been reached.
+
+If `apk info` succeeds at minute 12, use the remaining useful window to continue real apk pressure.
+If it succeeds at minute 24, use the remaining useful window to continue real apk pressure.
+If a local `.apk` path becomes usable before the boundary, continue through that path while evidence and time allow.
+
+The only normal reason to leave implementation/pressure mode is reaching the approximately 30-minute engineering boundary.
+
+If a hard external infrastructure failure blocks all meaningful progress, spend the remaining useful window attempting bounded restoration, gathering precise evidence, and preserving reproducibility. Do not convert a five-minute infrastructure problem into a five-minute batch.
+
+======================================================================
+PERSISTENCE AND FINAL HANDOFF — AFTER THE WORKING WINDOW
+======================================================================
+
+After the useful ~30-minute engineering window, persist the final handoff:
 
   docs/reports/AGENTIC_SNOWBALL_BATCH_32V.md
 
-The report must include:
+The final report must include:
 
-- exact starting main SHA
-- confirmation of inherited PR #98 merge checkpoint
-- exact validation-evidence files regenerated
-- exact validation commands/results
-- confirmation whether `zig build check` is green
-- exact real-QEMU `/sbin/apk --version` result
-- `/sbin/apk --help` result
-- every unchanged `apk info` retry and observed frontier
-- causal diagnosis of the 0x8 memset destination if found
-- mechanisms admitted and focused tests
-- Playable Alpine re-proof result
-- files changed
-- final implementation commit SHA
-- exactly one next causal blocker if incomplete
+- exact starting main SHA;
+- PR #98 checkpoint reference and merge SHA;
+- exact validation evidence regenerated;
+- exact validation commands and results;
+- whether local `zig build check` is green;
+- exact QEMU version used;
+- exact canonical Alpine namespace/artifact identity used;
+- exact `/sbin/apk --version` result;
+- exact `/sbin/apk --help` result;
+- every meaningful unchanged `apk info` retry in causal order;
+- root cause of the historical `memset` destination `0x8` fault if identified;
+- every general mechanism admitted;
+- focused permanent tests added for each admitted mechanism;
+- any later apk frontier exposed after `apk info` succeeds;
+- whether real local package-database behavior succeeded;
+- whether any local `.apk` verification/extraction/install behavior was directly proven;
+- complete Playable Alpine re-proof result;
+- exact files changed;
+- final implementation commit SHA;
+- exactly one next causal blocker if the larger apk goal remains incomplete.
 
-Do not claim package-manager functionality that was not directly observed.
-Do not claim green CI solely from local commands; record what was actually run and leave the pushed branch suitable for GitHub validation.
+Do not claim anything not directly observed.
+Do not call `apk info` successful unless it completes successfully.
+Do not call local apk install successful unless a real package transaction completes and its installed result can be verified.
+Do not call CI green merely from local validation; distinguish local green from GitHub workflow state.
+
+FINAL PRIORITY ORDER
+
+1. preserve correctness and invariants;
+2. close deterministic validation debt;
+3. re-prove earned apk milestones;
+4. make `apk info` succeed if causally achievable;
+5. continue into stronger real local apk behavior for the remainder of the full useful ~30-minute window;
+6. only after that window, persist the handoff.
 
 BEGIN.

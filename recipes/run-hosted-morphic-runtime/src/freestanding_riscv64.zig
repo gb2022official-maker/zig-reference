@@ -126,7 +126,7 @@ const prepared_image_pages = 320;
 // Private file mappings use a distinct monotonic bounded pool so a large
 // shared object cannot consume exec/brk backing. The linker keeps both pools
 // in the prepared reservation below caller-artifact transport.
-const private_file_mapping_pages = 1024;
+const private_file_mapping_pages = 2048;
 const external_stack_pages = 2;
 var prepared_table_backing: [prepared_table_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
 var external_prepared_backing: [prepared_image_pages][frames.PageSize]u8 align(frames.PageSize) linksection(".prepared_image_reservation") = undefined;
@@ -271,7 +271,7 @@ var external_stack_image: initial_stack.StackPlan(external_stack_plan_capacity) 
 var external_program_break: usize = 0;
 var external_next_backing: usize = 0;
 var external_next_private_file_backing: usize = 0;
-const ExternalRuntimeMappings = runtime_mappings.BoundedRuntimeMappings(8, frames.PageSize);
+const ExternalRuntimeMappings = runtime_mappings.BoundedRuntimeMappings(16, frames.PageSize);
 var external_runtime_mappings: ExternalRuntimeMappings = .{};
 export var external_entry: usize = 0;
 export var external_initial_sp: usize = 0;
@@ -1528,7 +1528,7 @@ fn externalExecve(frame: *TrapFrame) usize {
     return 0;
 }
 
-const LinuxRequestKind = enum { get_current_directory, change_directory, duplicate, duplicate_to, fcntl, close, pipe2, open_at, get_directory_entries, read, write, write_vector, new_fstatat, fstat, program_break, clone, execve, memory_map, terminate, unsupported };
+const LinuxRequestKind = enum { get_current_directory, change_directory, duplicate, duplicate_to, fcntl, close, pipe2, open_at, get_directory_entries, read, write, write_vector, new_fstatat, fstat, program_break, memory_unmap, clone, execve, memory_map, terminate, unsupported };
 fn decodeLinuxRequestKind(number: usize) LinuxRequestKind {
     return switch (number) {
         17 => .get_current_directory,
@@ -1546,6 +1546,7 @@ fn decodeLinuxRequestKind(number: usize) LinuxRequestKind {
         79 => .new_fstatat,
         80 => .fstat,
         214 => .program_break,
+        215 => .memory_unmap,
         220 => .clone,
         221 => .execve,
         222 => .memory_map,
@@ -1554,7 +1555,7 @@ fn decodeLinuxRequestKind(number: usize) LinuxRequestKind {
     };
 }
 comptime {
-    if (decodeLinuxRequestKind(17) != .get_current_directory or decodeLinuxRequestKind(49) != .change_directory or decodeLinuxRequestKind(23) != .duplicate or decodeLinuxRequestKind(24) != .duplicate_to or decodeLinuxRequestKind(25) != .fcntl or decodeLinuxRequestKind(56) != .open_at or decodeLinuxRequestKind(57) != .close or decodeLinuxRequestKind(59) != .pipe2 or decodeLinuxRequestKind(61) != .get_directory_entries or decodeLinuxRequestKind(63) != .read or decodeLinuxRequestKind(64) != .write or decodeLinuxRequestKind(66) != .write_vector or decodeLinuxRequestKind(79) != .new_fstatat or decodeLinuxRequestKind(80) != .fstat or decodeLinuxRequestKind(214) != .program_break or decodeLinuxRequestKind(220) != .clone or decodeLinuxRequestKind(221) != .execve or decodeLinuxRequestKind(222) != .memory_map or decodeLinuxRequestKind(93) != .terminate or decodeLinuxRequestKind(94) != .terminate or decodeLinuxRequestKind(0x7fff) != .unsupported) @compileError("Linux/RV64 decoder drift");
+    if (decodeLinuxRequestKind(17) != .get_current_directory or decodeLinuxRequestKind(49) != .change_directory or decodeLinuxRequestKind(23) != .duplicate or decodeLinuxRequestKind(24) != .duplicate_to or decodeLinuxRequestKind(25) != .fcntl or decodeLinuxRequestKind(56) != .open_at or decodeLinuxRequestKind(57) != .close or decodeLinuxRequestKind(59) != .pipe2 or decodeLinuxRequestKind(61) != .get_directory_entries or decodeLinuxRequestKind(63) != .read or decodeLinuxRequestKind(64) != .write or decodeLinuxRequestKind(66) != .write_vector or decodeLinuxRequestKind(79) != .new_fstatat or decodeLinuxRequestKind(80) != .fstat or decodeLinuxRequestKind(214) != .program_break or decodeLinuxRequestKind(215) != .memory_unmap or decodeLinuxRequestKind(220) != .clone or decodeLinuxRequestKind(221) != .execve or decodeLinuxRequestKind(222) != .memory_map or decodeLinuxRequestKind(93) != .terminate or decodeLinuxRequestKind(94) != .terminate or decodeLinuxRequestKind(0x7fff) != .unsupported) @compileError("Linux/RV64 decoder drift");
 }
 
 fn copyPipeDescriptors(destination: usize, descriptors: [2]usize) !void {
@@ -1831,7 +1832,7 @@ const ExternalFileMmapContext = struct {
     }
 
     pub fn prepare(self: *@This(), plan: linux_rv64_file_mmap.Plan) !void {
-        const page_count = plan.mapped_length / frames.PageSize;
+        const page_count = plan.accessible_length / frames.PageSize;
         for (external_private_file_backing[self.backing_start .. self.backing_start + page_count]) |*page| @memset(page, 0);
         const bytes = self.source[plan.file_offset..][0..plan.byte_length];
         for (bytes, 0..) |byte, byte_index|
@@ -1873,7 +1874,7 @@ fn externalFileMmap(length: usize, protection: usize, flags: usize, descriptor: 
         error.FileRange => 75,
         error.AddressOverflow => 12,
     });
-    const page_count = plan.mapped_length / frames.PageSize;
+    const page_count = plan.accessible_length / frames.PageSize;
     const backing_end = std.math.add(usize, external_next_private_file_backing, page_count) catch return negativeErrno(12);
     if (backing_end > private_file_mapping_pages) return negativeErrno(12);
 
@@ -1897,6 +1898,37 @@ fn externalFileMmap(length: usize, protection: usize, flags: usize, descriptor: 
         return candidate;
     }
     return negativeErrno(12);
+}
+
+fn externalFixedFileMmap(address: usize, length: usize, protection: usize, descriptor: usize, offset: usize) usize {
+    if (!external_runtime_mappings.containsRange(address, length)) return negativeErrno(22);
+    const description = linux_rv64_file_mmap.resolveRegular(&syscall_resources, &syscall_bindings, descriptor, 0x101) catch return negativeErrno(9);
+    const manifest_offset = description.state >> 32;
+    const manifest: []const u8 = &external_rv64_namespace_manifest;
+    if (manifest_offset >= manifest.len) return negativeErrno(5);
+    const row_end = std.mem.indexOfScalarPos(u8, manifest, manifest_offset, '}') orelse return negativeErrno(5);
+    const row = manifest[manifest_offset .. row_end + 1];
+    const data_offset = jsonUnsignedAfter(row, 0, "\"data_offset\":") orelse return negativeErrno(5);
+    const data_length = jsonUnsignedAfter(row, 0, "\"data_length\":") orelse return negativeErrno(5);
+    if (data_offset > external_rv64_namespace_data.len or data_length > external_rv64_namespace_data.len - data_offset) return negativeErrno(5);
+    const plan = linux_rv64_file_mmap.plan(data_length, length, protection, 0x2, offset, frames.PageSize) catch return negativeErrno(22);
+    const page_count = plan.accessible_length / frames.PageSize;
+    const backing_end = std.math.add(usize, external_next_private_file_backing, page_count) catch return negativeErrno(12);
+    if (backing_end > private_file_mapping_pages) return negativeErrno(12);
+    var context = ExternalFileMmapContext{ .source = external_rv64_namespace_data[data_offset .. data_offset + data_length], .backing_start = external_next_private_file_backing };
+    context.prepare(plan) catch return negativeErrno(12);
+    var page: usize = 0;
+    while (page < plan.mapped_length / frames.PageSize) : (page += 1) {
+        if (externalPageOccupied({}, address + page * frames.PageSize)) {
+            _ = batch26_builder.unmapPage(address + page * frames.PageSize, .page_4k) catch shutdown();
+        }
+    }
+    page = 0;
+    while (page < page_count) : (page += 1)
+        context.mapPage(address + page * frames.PageSize, page, plan.permissions) catch shutdown();
+    external_next_private_file_backing = backing_end;
+    asm volatile ("sfence.vma" ::: "memory");
+    return address;
 }
 
 fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
@@ -2175,6 +2207,28 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
             }
             frame.x[10] = result;
         },
+        .memory_unmap => {
+            const address = frame.x[10];
+            const length = frame.x[11];
+            const rounded = std.math.add(usize, length, frames.PageSize - 1) catch {
+                frame.x[10] = negativeErrno(22);
+                return finishReturningSyscall(frame, index);
+            };
+            const mapped_length = rounded & ~@as(usize, frames.PageSize - 1);
+            if (address & (frames.PageSize - 1) != 0 or mapped_length == 0 or !external_runtime_mappings.containsRange(address, mapped_length)) {
+                frame.x[10] = negativeErrno(22);
+            } else {
+                var page = address;
+                while (page < address + mapped_length) : (page += frames.PageSize) {
+                    if (externalPageOccupied({}, page)) {
+                        _ = batch26_builder.unmapPage(page, .page_4k) catch shutdown();
+                    }
+                }
+                external_runtime_mappings.releaseRange(address, mapped_length) catch shutdown();
+                asm volatile ("sfence.vma" ::: "memory");
+                frame.x[10] = 0;
+            }
+        },
         .memory_map => {
             syscall_semantics[index] = 8;
             const address = frame.x[10];
@@ -2188,6 +2242,8 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
             // anonymous reservation. Linux values and errno remain here.
             if (address == 0 and flags == 0x2) {
                 frame.x[10] = externalFileMmap(length, protection, flags, descriptor, offset);
+            } else if (address != 0 and flags == 0x12) {
+                frame.x[10] = externalFixedFileMmap(address, length, protection, descriptor, offset);
             } else if (descriptor != std.math.maxInt(usize) or offset != 0 or length == 0) {
                 if (external_artifact_options.live_console_input) {
                     write("LINUX_MMAP_REJECT address=");

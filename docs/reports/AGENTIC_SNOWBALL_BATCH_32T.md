@@ -51,18 +51,7 @@ and musl SHA-256
 `f65dfa1e845af4d8c57f5274a8abac7a8c150372b014fb413e44f4cc70050de1`.
 The exact namespace-backed install command then succeeded with the new layout.
 
-The unchanged retry was attempted as:
-
-```text
-{ sleep 8; printf '/sbin/apk --version\n'; sleep 10; } | timeout 25s qemu-system-riscv64 -machine virt -nographic -bios default -kernel /tmp/alpine-machine/bin/morphic-freestanding-riscv64
-```
-
-It could not start: this environment has no `qemu-system-riscv64` executable
-(exit 127). Consequently there was no guest trace and no evidence-backed next
-runtime repair to admit. `/sbin/apk --version` did **not** succeed; `--help` and
-`apk info` were not reached. The Playable Alpine sequence also could not be
-re-proved for the same environment limitation. No result is silently promoted
-to a pass.
+The original environment-blocked pressure account is superseded by the QEMU-capable continuation below.
 
 ## Validation
 
@@ -84,8 +73,48 @@ and transport was moved; both commands then passed.
 Changed files are `COMMANDS.md`, this report, the freestanding linker script,
 and `recipes/run-hosted-morphic-runtime/src/{freestanding_riscv64.zig,linux_rv64_file_mmap.zig}`.
 
-**Exactly one next causal blocker:** restore an environment with
-`qemu-system-riscv64` and rerun the unchanged `/sbin/apk --version` command to
-observe and classify the first guest failure after the now-build-proven
-1,024-page private-file capacity repair; do not guess at the downstream fixed
-mapping or relative-symlink candidates before that trace.
+
+## QEMU-capable continuation
+
+The follow-up environment initially exposed a partially installed QEMU package;
+a bounded `dpkg --configure -a` completion restored
+`/usr/bin/qemu-system-riscv64`, QEMU 8.2.2. The canonical namespace-backed
+machine was rebuilt before every runtime retry.
+
+The first unchanged retry crossed the old 1,024-page check but showed
+`Value too large for data type`: the new EOF planner was still rejecting the
+loader's legal whole-range reservation. The repair now records separate
+`mapped_length` and `accessible_length`: the full Linux range is reserved, the
+final partial file page is copied and zero-tailed, and complete pages beyond EOF
+receive no readable leaf. Focused tests prove the distinction.
+
+The second retry reached the exact fixed file mappings for libcrypto and libapk
+(`MAP_PRIVATE|MAP_FIXED`, including libcrypto address `0x353000`, length
+`0x77000`, offset `0x33f000`). A bounded fixed replacement path now accepts only
+a range already owned by the preceding mapping, prepares private bytes before
+replacement, removes existing leaves, installs only file-accessible leaves, and
+commits backing after mapping. The neutral mapping table gained tested
+non-mutating containment.
+
+The third retry crossed both fixed mappings and exposed Linux/RV64 `munmap(215)`
+as `ENOSYS`. A bounded implementation now validates alignment/range, removes
+leaves only from runtime-owned mappings, and updates ownership with an atomic,
+tested range-release operation that handles entry splitting. The mapping table
+bound rose from 8 to 16 and private-file backing from 1,024 to 2,048 pages under
+the existing linker separation. The fourth and fifth unchanged retries crossed
+`munmap`; they reached libssl and repeated dependency loads. The first
+libcrypto load now returns deterministic `ENOMEM`, while relative `libz.so.1`
+still returns `ENOENT`. Because the trace does not yet identify which bounded
+subresource produces that first ENOMEM, no symlink or later-syscall repair was
+guessed.
+
+`/sbin/apk --version` did not succeed. Consequently `--help` and `apk info` were
+not reached. The canonical persistent shell was re-proved after the runtime
+changes: both echoes, `/`, root listing, Alpine `3.22.0`, `/tmp`, redirection
+read-back `hello`, pipeline `hello`, and `still-alive` all appeared before the
+host timeout terminated the live guest.
+
+**Exactly one next causal blocker:** add bounded stage-specific failure identity
+to the first libcrypto file-mapping transaction, determine which checked
+resource returns `ENOMEM` after fixed-map/munmap progress, repair that smallest
+general resource, and immediately rerun unchanged `/sbin/apk --version`.

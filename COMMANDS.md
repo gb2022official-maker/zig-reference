@@ -728,3 +728,10 @@ its non-overlapping linker reservation. Real-QEMU pressure could not be rerun in
 this environment because `qemu-system-riscv64` is unavailable; this is not apk
 success evidence and the unchanged `/sbin/apk --version` retry remains required.
 No new runnable command was introduced.
+
+The Batch 32T QEMU-capable continuation verified QEMU 8.2.2 and repeatedly ran
+the documented namespace-backed system-QEMU surface. Real pressure crossed the
+EOF reservation correction, fixed private file replacement, and `munmap(215)`;
+the latest unchanged `/sbin/apk --version` reaches a deterministic first
+libcrypto `ENOMEM`. The full Playable Alpine persistent-shell sequence passed
+under the same rebuilt runtime. No new developer command was introduced.

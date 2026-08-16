@@ -16,13 +16,14 @@ pub const Plan = struct {
     file_offset: usize,
     byte_length: usize,
     mapped_length: usize,
+    accessible_length: usize,
     page_size: usize,
     permissions: Permissions,
 
     /// Copies immutable namespace bytes into private, caller-owned pages and
     /// deterministically clears the last-page tail.
     pub fn prepare(self: Plan, source: []const u8, destination: []u8) void {
-        std.debug.assert(destination.len == self.mapped_length);
+        std.debug.assert(destination.len == self.accessible_length);
         @memset(destination, 0);
         @memcpy(destination[0..self.byte_length], source[self.file_offset..][0..self.byte_length]);
     }
@@ -43,8 +44,8 @@ pub fn plan(file_size: usize, length: usize, protection: usize, flags: usize, of
     const mapped_length = rounded & ~(page_size - 1);
     const available = file_size - offset;
     const available_rounded = std.math.add(usize, available, page_size - 1) catch return error.AddressOverflow;
-    if (mapped_length > available_rounded & ~(page_size - 1)) return error.FileRange;
-    return .{ .file_offset = offset, .byte_length = @min(length, file_size - offset), .mapped_length = mapped_length, .page_size = page_size, .permissions = permissions };
+    const accessible_length = @min(mapped_length, available_rounded & ~(page_size - 1));
+    return .{ .file_offset = offset, .byte_length = @min(length, available), .mapped_length = mapped_length, .accessible_length = accessible_length, .page_size = page_size, .permissions = permissions };
 }
 
 /// Owns the failure-atomic reserve/prepare/map transaction used by the runtime.
@@ -59,7 +60,7 @@ pub fn mapPrivate(plan_value: Plan, start: usize, mappings: anytype, context: an
         mappings.cancelLast(start, plan_value.mapped_length);
         return err;
     };
-    const page_count = plan_value.mapped_length / plan_value.page_size;
+    const page_count = plan_value.accessible_length / plan_value.page_size;
     var mapped: usize = 0;
     while (mapped < page_count) : (mapped += 1) {
         context.mapPage(start + mapped * plan_value.page_size, mapped, plan_value.permissions) catch |err| {
@@ -89,7 +90,9 @@ test "invalid class range alignment and W plus X fail closed" {
     try std.testing.expectError(error.InvalidArgument, plan(16, 4, 1, 2, 1, 4));
     const tail = try plan(16, 4, 1, 2, 12, 4);
     try std.testing.expectEqual(@as(usize, 4), tail.byte_length);
-    try std.testing.expectError(error.FileRange, plan(16, 9, 1, 2, 12, 4));
+    const beyond_eof = try plan(16, 9, 1, 2, 12, 4);
+    try std.testing.expectEqual(@as(usize, 12), beyond_eof.mapped_length);
+    try std.testing.expectEqual(@as(usize, 4), beyond_eof.accessible_length);
     try std.testing.expectError(error.FileRange, plan(16, 4, 1, 2, 20, 4));
     try std.testing.expectError(error.InvalidArgument, plan(16, 4, 0, 2, 0, 4));
     try std.testing.expectError(error.InvalidArgument, plan(16, 4, 2, 2, 0, 4));
@@ -103,9 +106,11 @@ test "only the final partial file page may be zero filled" {
     final_page.prepare(source, &private);
     try std.testing.expectEqualSlices(u8, &.{ '4', '5', 0, 0 }, &private);
 
-    // A request extending into the next complete page is rejected by planning,
-    // before reserve/prepare/map can mutate the address space.
-    try std.testing.expectError(error.FileRange, plan(source.len, 5, 1, 2, 4, 4));
+    // A request extending into the next complete page reserves the Linux range,
+    // but only the final partial file page receives a readable leaf.
+    const beyond_eof = try plan(source.len, 5, 1, 2, 4, 4);
+    try std.testing.expectEqual(@as(usize, 8), beyond_eof.mapped_length);
+    try std.testing.expectEqual(@as(usize, 4), beyond_eof.accessible_length);
 }
 
 test "descriptor resolution preserves position and resource ownership" {

@@ -754,3 +754,17 @@ derived musl `memset` store-fault frontier. No runnable command was added.
 ## Batch 32V validation recovery and apk-info causal progress
 
 Batch 32V regenerated all 60 validation-evidence records and traced the `apk info` null-derived `memset` through anonymous mmap. The bounded runtime now rounds Linux byte lengths, admits unbacked address-zero PROT_NONE reservations, carries a measured 64-entry mapping table and 584-page anonymous backing class, and copies only live prefixes during exec/fork state transfer. Focused recipe tests passed. Real QEMU crossed the historical `0x2711c` allocation and exposed a 391-page allocation; the enlarged machine compiled but did not reach external execution inside the final bounded retry, so `apk info` success is not claimed. No runnable command was added; `docs/reports/AGENTIC_SNOWBALL_BATCH_32V.md` records exact evidence.
+
+## Batch 32W bounded PREPARE-metadata stack repair
+
+Batch 32W reused the canonical Alpine v3.22.0 namespace-generation, live-console
+build, and system-QEMU command surfaces. The 584-page capacity had caused the
+capacity-sized external PREPARE metadata to be inlined into the cumulative
+supervisor startup frame, which crossed the explicit 60 KiB supervisor stack
+bound and corrupted adjacent BSS state before the external phase. External
+execution is now a non-inlined bounded phase and reuses the existing global
+candidate metadata, so QEMU again reaches external PREPARE, COMMIT, and execute.
+The immediate real `/sbin/apk --version` retry then exposed a supervisor load
+fault while the Sv39 walker reads a page-table address derived from user virtual
+address `0x4001b000`; version/help/info success is not claimed in this run.
+No runnable command was added.

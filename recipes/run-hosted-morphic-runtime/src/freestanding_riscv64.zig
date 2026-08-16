@@ -1085,7 +1085,7 @@ fn commitPreparedBatch26Exec(frame: *TrapFrame) void {
 /// backing, Sv39 builder, stack planner, and U-mode transition as exec. The
 /// map/unmap preflight forces every required table allocation before COMMIT;
 /// COMMIT itself can therefore only install leaves into existing tables.
-fn executeExternalArtifact(builder: *MachineBuilder, trap_end: usize, historical_stvec: usize) void {
+noinline fn executeExternalArtifact(builder: *MachineBuilder, trap_end: usize, historical_stvec: usize) void {
     batch26_builder = builder;
     write("ZIGREF_BATCH29_PHASE prepare\n");
     var bytes: []const u8 = &external_rv64_artifact;
@@ -1114,8 +1114,10 @@ fn executeExternalArtifact(builder: *MachineBuilder, trap_end: usize, historical
         shutdown();
     };
     write("ZIGREF_BATCH29_PREPARE elf\n");
-    const prepared = ExternalPreparedImage.prepare(bytes, &candidate.main.load, 0, &external_prepared_backing) catch shutdown();
-    const prepared_interpreter = if (candidate.interpreter) |*interpreter|
+    // Keep capacity-sized PREPARE metadata in the existing bounded candidate
+    // storage. Large capacity bounds must not inflate the supervisor stack.
+    external_exec_image_candidate = ExternalPreparedImage.prepare(bytes, &candidate.main.load, 0, &external_prepared_backing) catch shutdown();
+    external_exec_interpreter_image_candidate = if (candidate.interpreter) |*interpreter|
         ExternalPreparedImage.prepare(interpreter_bytes.?, &interpreter.load, 0x40000000, &external_interpreter_backing) catch shutdown()
     else
         ExternalPreparedImage{};
@@ -1151,18 +1153,18 @@ fn executeExternalArtifact(builder: *MachineBuilder, trap_end: usize, historical
     // PREPARE table-backing preflight. Each successful temporary leaf is
     // removed immediately; the builder-owned intermediate tables remain ready.
     write("ZIGREF_BATCH29_PREPARE tables\n");
-    preflightExternalImage(builder, &prepared, &external_prepared_backing) catch shutdown();
+    preflightExternalImage(builder, &external_exec_image_candidate, &external_prepared_backing) catch shutdown();
     write("ZIGREF_BATCH32A_PREPARE interpreter-tables pages=");
-    writeUsizeHex(prepared_interpreter.items().len);
+    writeUsizeHex(external_exec_interpreter_image_candidate.items().len);
     write("\n");
-    preflightExternalImage(builder, &prepared_interpreter, &external_interpreter_backing) catch shutdown();
-    external_image = prepared;
-    external_interpreter_image = prepared_interpreter;
+    preflightExternalImage(builder, &external_exec_interpreter_image_candidate, &external_interpreter_backing) catch shutdown();
+    external_image = external_exec_image_candidate;
+    external_interpreter_image = external_exec_interpreter_image_candidate;
     external_stack_image = stack;
     external_program_break = 0;
     for (candidate.main.load.items()) |segment| external_program_break = @max(external_program_break, segment.memory.end);
     external_program_break = (external_program_break + frames.PageSize - 1) & ~@as(usize, frames.PageSize - 1);
-    external_next_backing = prepared.items().len;
+    external_next_backing = external_exec_image_candidate.items().len;
     external_runtime_mappings = .{};
     external_next_private_file_backing = 0;
     write("ZIGREF_BATCH29_PHASE commit\n");

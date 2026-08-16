@@ -39,6 +39,10 @@ pub fn PageOwner(comptime capacity: usize) type {
             };
             return error.UnknownFrame;
         }
+        pub fn owns(self: *const Self, frame: u64) bool {
+            for (0..capacity) |i| if (self.used[i] and self.pages[i].frame == frame) return true;
+            return false;
+        }
         pub fn count(self: *const Self) usize {
             var n: usize = 0;
             for (self.used) |u| {

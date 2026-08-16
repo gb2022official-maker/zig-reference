@@ -1690,6 +1690,12 @@
     },
     {
       "kind": "function",
+      "module": "riscv-page-table-page-owner",
+      "name": "owns",
+      "signature": "owns()"
+    },
+    {
+      "kind": "function",
       "module": "aligned-address-and-size-helpers",
       "name": "paddingNeeded",
       "signature": "paddingNeeded(value: usize, alignment: usize) AlignmentError!usize"

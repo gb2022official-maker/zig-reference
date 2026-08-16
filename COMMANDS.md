@@ -768,3 +768,7 @@ The immediate real `/sbin/apk --version` retry then exposed a supervisor load
 fault while the Sv39 walker reads a page-table address derived from user virtual
 address `0x4001b000`; version/help/info success is not claimed in this run.
 No runnable command was added.
+
+## Sv39 apk-info frontier guard run
+
+This run reproduced the real Alpine `/sbin/apk --version` Sv39 failure under QEMU 8.2.2: `RealPageOwner.owns` accepted user-range `0x4001b000` as page-table backing and faulted while reading `0x4001b148`. The builder now rejects branch PTEs that target frames not owned by the page-table owner, and the real owner refuses low user-range table addresses. Focused validation ran `zig build test-riscv-sv39-page-table-builder test-recipe-run-hosted-morphic-runtime` and `zig build test-recipe-run-hosted-morphic-runtime`; apk version/help/info success is still not claimed. See `docs/reports/AGENTIC_SNOWBALL_NEXT_SV39_FRONTIER_TO_APK_INFO_SUCCESS.md`. No runnable command surface changed.

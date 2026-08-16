@@ -191,6 +191,46 @@
         "examples": []
       },
       {
+        "name": "owns",
+        "kind": "function",
+        "signature": "owns()",
+        "visibility": "public",
+        "summary": "Return whether the frame is currently owned by this page-table owner without reading the frame contents.",
+        "receiver": null,
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "result",
+            "type": "bool",
+            "meaning": "True when the frame is one of the currently allocated page-table frames.",
+            "ownership": "not applicable",
+            "borrowed_from": "",
+            "lifetime": "program",
+            "cleanup_required": false,
+            "cleanup_responsibility": "none",
+            "invalidation_conditions": [],
+            "aliasing": "not applicable",
+            "borrows_from_module": false,
+            "borrows_from_input": false,
+            "valid_after_mutation": "not applicable",
+            "absence_meaning": "not applicable"
+          }
+        ],
+        "errors": [],
+        "preconditions": [],
+        "postconditions": [
+          "Module invariants hold on success."
+        ],
+        "failure_atomicity": "Failures preserve documented cursor or collection state.",
+        "complexity": {
+          "time": "not applicable",
+          "space": "not applicable"
+        },
+        "invalidates": [],
+        "thread_safety": "not applicable",
+        "examples": []
+      },
+      {
         "name": "count",
         "kind": "function",
         "signature": "count()",
@@ -201,8 +241,8 @@
         "outputs": [
           {
             "name": "result",
-            "type": "source-declared return type",
-            "meaning": "Result of count.",
+            "type": "bool",
+            "meaning": "True when the frame is one of the currently allocated page-table frames.",
             "ownership": "not applicable",
             "borrowed_from": "",
             "lifetime": "program",

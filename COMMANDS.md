@@ -750,3 +750,7 @@ focused recipe gate, real `/sbin/apk --version`, `/sbin/apk --help`, fresh
 `apk info`, and Playable Alpine commands were rerun; the version milestone and
 persistent shell remain proved, while `apk info` retains the documented null-
 derived musl `memset` store-fault frontier. No runnable command was added.
+
+## Batch 32V validation recovery and apk-info causal progress
+
+Batch 32V regenerated all 60 validation-evidence records and traced the `apk info` null-derived `memset` through anonymous mmap. The bounded runtime now rounds Linux byte lengths, admits unbacked address-zero PROT_NONE reservations, carries a measured 64-entry mapping table and 584-page anonymous backing class, and copies only live prefixes during exec/fork state transfer. Focused recipe tests passed. Real QEMU crossed the historical `0x2711c` allocation and exposed a 391-page allocation; the enlarged machine compiled but did not reach external execution inside the final bounded retry, so `apk info` success is not claimed. No runnable command was added; `docs/reports/AGENTIC_SNOWBALL_BATCH_32V.md` records exact evidence.

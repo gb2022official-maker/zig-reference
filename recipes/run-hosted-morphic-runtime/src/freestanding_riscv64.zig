@@ -124,10 +124,11 @@ const ordinary_table_pages = 4;
 // physical layout band; retain two additional PREPARE table frames so the
 // unchanged external image transaction remains possible.
 const prepared_table_pages = 32;
-// The exact BusyBox image occupies 244 pages; exec starts a fresh dynamic
-// loader and therefore needs bounded post-image brk/mmap headroom rather than
-// inheriting the original shell's already-established allocator state.
-const prepared_image_pages = 320;
+// The exact BusyBox image occupies 244 pages. Real apk reaches a 191-page
+// cursor before requesting a further 391 anonymous pages for package state;
+// retain a bounded 584-page exec/brk/anonymous class for that measured load
+// plus two pages of explicit headroom.
+const prepared_image_pages = 584;
 // Private file mappings use a distinct monotonic bounded pool so a large
 // shared object cannot consume exec/brk backing. The linker keeps both pools
 // in the prepared reservation below caller-artifact transport.
@@ -279,7 +280,10 @@ var external_stack_image: initial_stack.StackPlan(external_stack_plan_capacity) 
 var external_program_break: usize = 0;
 var external_next_backing: usize = 0;
 var external_next_private_file_backing: usize = 0;
-const ExternalRuntimeMappings = runtime_mappings.BoundedRuntimeMappings(16, frames.PageSize);
+// The real Alpine apk dependency/RELRO and allocator topology reaches all 32
+// historical records before its 40-page allocation. Keep the table bounded
+// while admitting that measured next mapping and comparable topology growth.
+const ExternalRuntimeMappings = runtime_mappings.BoundedRuntimeMappings(64, frames.PageSize);
 var external_runtime_mappings: ExternalRuntimeMappings = .{};
 export var external_entry: usize = 0;
 export var external_initial_sp: usize = 0;
@@ -1499,8 +1503,8 @@ fn externalExecve(frame: *TrapFrame) usize {
             }
         }
     }
-    external_prepared_backing = external_exec_main_candidate;
-    external_interpreter_backing = external_exec_interpreter_candidate;
+    @memcpy(external_prepared_backing[0..external_exec_image_candidate.items().len], external_exec_main_candidate[0..external_exec_image_candidate.items().len]);
+    @memcpy(external_interpreter_backing[0..external_exec_interpreter_image_candidate.items().len], external_exec_interpreter_candidate[0..external_exec_interpreter_image_candidate.items().len]);
     external_image = external_exec_image_candidate;
     external_interpreter_image = external_exec_interpreter_image_candidate;
     external_stack_image = stack;
@@ -2072,6 +2076,20 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
         writeUsizeHex(frame.sepc);
         write(" stval=");
         writeUsizeHex(frame.stval);
+        write(" ra=");
+        writeUsizeHex(frame.x[1]);
+        write(" sp=");
+        writeUsizeHex(frame.x[2]);
+        write(" gp=");
+        writeUsizeHex(frame.x[3]);
+        write(" tp=");
+        writeUsizeHex(frame.x[4]);
+        write(" a0=");
+        writeUsizeHex(frame.x[10]);
+        write(" a1=");
+        writeUsizeHex(frame.x[11]);
+        write(" a2=");
+        writeUsizeHex(frame.x[12]);
         write("\n");
         shutdown();
     }
@@ -2315,8 +2333,8 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 parent.sepc += 4;
                 parent.x[10] = external_child_pid;
                 external_fork_parent = parent;
-                external_fork_main_snapshot = external_prepared_backing;
-                external_fork_interpreter_snapshot = external_interpreter_backing;
+                @memcpy(external_fork_main_snapshot[0..external_next_backing], external_prepared_backing[0..external_next_backing]);
+                @memcpy(external_fork_interpreter_snapshot[0..external_interpreter_image.items().len], external_interpreter_backing[0..external_interpreter_image.items().len]);
                 external_fork_stack_snapshot = external_prepared_stack;
                 external_fork_image_snapshot = external_image;
                 external_fork_interpreter_image_snapshot = external_interpreter_image;
@@ -2431,8 +2449,31 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 }
                 asm volatile ("sfence.vma" ::: "memory");
                 frame.x[10] = address;
+            } else if (address == 0 and protection == 0 and flags == 0x22) {
+                const rounded_length = ExternalRuntimeMappings.roundedLength(length) catch {
+                    frame.x[10] = negativeErrno(22);
+                    return finishReturningSyscall(frame, index);
+                };
+                var candidate_address = external_program_break;
+                while (candidate_address < user_stack_va) : (candidate_address += frames.PageSize) {
+                    external_runtime_mappings.reserve(candidate_address, rounded_length, .{}, false, {}, externalPageOccupied) catch |err| switch (err) {
+                        error.Collision => continue,
+                        else => {
+                            frame.x[10] = negativeErrno(12);
+                            return finishReturningSyscall(frame, index);
+                        },
+                    };
+                    frame.x[10] = candidate_address;
+                    break;
+                } else frame.x[10] = negativeErrno(12);
             } else if (address == 0 and protection == 3 and flags == 0x22) {
-                const page_count = ExternalRuntimeMappings.pageCount(length) catch {
+                // Linux accepts a byte length and maps every page touched by
+                // that range; the caller is not required to page-align it.
+                const rounded_length = ExternalRuntimeMappings.roundedLength(length) catch {
+                    frame.x[10] = negativeErrno(22);
+                    return finishReturningSyscall(frame, index);
+                };
+                const page_count = ExternalRuntimeMappings.pageCount(rounded_length) catch {
                     frame.x[10] = negativeErrno(22);
                     return finishReturningSyscall(frame, index);
                 };
@@ -2446,7 +2487,7 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 }
                 var candidate_address = external_program_break;
                 while (candidate_address < user_stack_va) : (candidate_address += frames.PageSize) {
-                    external_runtime_mappings.reserve(candidate_address, length, .{ .read = true, .write = true }, false, {}, externalPageOccupied) catch |err| switch (err) {
+                    external_runtime_mappings.reserve(candidate_address, rounded_length, .{ .read = true, .write = true }, false, {}, externalPageOccupied) catch |err| switch (err) {
                         error.Collision => continue,
                         else => {
                             frame.x[10] = negativeErrno(12);
@@ -2468,7 +2509,7 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                             var rollback_page: usize = 0;
                             while (rollback_page < mapped_pages) : (rollback_page += 1)
                                 _ = batch26_builder.unmapPage(candidate_address + rollback_page * frames.PageSize, .page_4k) catch shutdown();
-                            external_runtime_mappings.cancelLast(candidate_address, length);
+                            external_runtime_mappings.cancelLast(candidate_address, rounded_length);
                             asm volatile ("sfence.vma" ::: "memory");
                             frame.x[10] = negativeErrno(12);
                             return finishReturningSyscall(frame, index);
@@ -2554,8 +2595,8 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                         }
                     }
                 }
-                external_prepared_backing = external_fork_main_snapshot;
-                external_interpreter_backing = external_fork_interpreter_snapshot;
+                @memcpy(external_prepared_backing[0..external_fork_next_backing], external_fork_main_snapshot[0..external_fork_next_backing]);
+                @memcpy(external_interpreter_backing[0..external_fork_interpreter_image_snapshot.items().len], external_fork_interpreter_snapshot[0..external_fork_interpreter_image_snapshot.items().len]);
                 external_prepared_stack = external_fork_stack_snapshot;
                 external_image = external_fork_image_snapshot;
                 external_interpreter_image = external_fork_interpreter_image_snapshot;

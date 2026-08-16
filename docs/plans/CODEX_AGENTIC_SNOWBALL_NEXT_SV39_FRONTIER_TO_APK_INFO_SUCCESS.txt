@@ -1,0 +1,229 @@
+CODEX AGENTIC SNOWBALL — NEXT BATCH
+CURRENT SV39 PAGE-TABLE FRONTIER -> APK INFO -> STRONGER LOCAL APK PRESSURE
+
+Repository: gb2022official-maker/zig-reference
+Start from current main.
+Do not restart from older batch plans.
+
+MISSION
+
+This is an implementation + real-QEMU pressure run, not a diagnosis-only run and not a one-bug batch.
+
+Primary target:
+
+    make real unchanged Alpine v3.22.0 RV64 `apk info` complete successfully if causally achievable
+
+If `apk info` succeeds before the useful ~30-minute boundary, immediately continue into stronger real local apk/package-database behavior.
+
+Use the full useful approximately 30-minute engineering slice before final handoff.
+
+CURRENT FRONTIER
+
+Previous Batch 32W work addressed the 584-page startup/PREPARE->COMMIT problem.
+PR #100 subsequently restored the enlarged machine's ability to reach external execution.
+Do not spend this run rediscovering or re-solving that startup frontier.
+
+The current blocker is later in the real Alpine workload.
+
+The latest observed failure occurs in the Sv39 page-table / `RealPageOwner` path, where a user-derived address around:
+
+    0x4001b000
+
+is being treated as though it were a physical page-table address.
+
+The important question is not merely why `RealPageOwner` rejects that value.
+
+Determine:
+
+    What is the first producer that places the invalid value/state into the page-table representation?
+
+Trace backward from the failure until the first incorrect state transition is identified.
+
+PHASE A — REPRODUCE THE CURRENT FRONTIER
+
+First verify:
+
+    zig version
+    command -v qemu-system-riscv64
+    qemu-system-riscv64 --version
+
+Then reproduce the current canonical real-Alpine failure under QEMU.
+
+Do not perform a broad architecture audit.
+
+Capture:
+
+- exact failing command;
+- exact PC;
+- exact virtual/physical addresses involved;
+- page-table level involved;
+- relevant PTE contents;
+- ownership state;
+- first observable invariant violation.
+
+PHASE B — TRACE THE PRODUCER
+
+Trace the failing Sv39/page-table state backward.
+
+Investigate the concrete mechanism responsible for the incorrect physical/page-table identity.
+
+Potential areas may include, only when runtime evidence points there:
+
+- virtual -> physical conversion;
+- PTE construction;
+- page-table allocation;
+- page-table ownership transfer;
+- mapping creation/removal;
+- fork/exec address-space state;
+- page-table copy/restore;
+- stale mapping state;
+- physical-page identity bookkeeping;
+- user/page-table address confusion.
+
+Do not guess.
+
+Do not patch the fault site merely to make `RealPageOwner.owns()` return true.
+
+Do not special-case:
+
+- `apk`;
+- musl;
+- `0x4001b000`;
+- a particular PC;
+- a particular pathname;
+- one binary.
+
+Find the general producer.
+
+PHASE C — FIX THE SMALLEST GENERAL MECHANISM
+
+Implement the smallest bounded repair that explains the observed failure.
+
+Preserve existing contracts:
+
+- PREPARE -> COMMIT;
+- failure atomicity / rollback;
+- W+X = 0;
+- SUM discipline;
+- bounded ownership;
+- canonical Alpine source identity;
+- exact FD/resource ownership;
+- fork/private-file state correctness;
+- parent shell liveness;
+- deterministic Linux errno;
+- no workload-specific hacks;
+- existing Playable Alpine behavior.
+
+Add a focused regression/proof for the mechanism whenever practical.
+
+Then immediately rebuild and return to the unchanged real Alpine workload.
+
+PHASE D — RE-PROVE THE APK LADDER
+
+After the runtime repair, run:
+
+    /sbin/apk --version
+    /sbin/apk --help
+    apk info
+
+Do not assume previous milestones survived.
+Record exact output.
+
+The objective is not merely to restore `apk --version`.
+The objective is to push unchanged `apk info` farther.
+
+PHASE E — CONTINUE THE SNOWBALL
+
+For the remainder of the useful engineering window:
+
+    run unchanged real `apk info`
+        -> observe exact first failure
+        -> find first bad producer/state transition
+        -> fix smallest general mechanism
+        -> focused proof
+        -> rebuild
+        -> rerun `apk info` immediately
+        -> repeat
+
+Do not batch speculative syscalls.
+Do not guess what `apk` will need next.
+Let the real workload expose the next requirement.
+
+If the first blocker is a syscall, implement only the smallest general Linux/RV64 semantics required by the observed contract.
+If the blocker is memory, repair the relevant memory invariant.
+If it is filesystem, repair the filesystem invariant.
+If it is process state, repair the process-state invariant.
+Always return to the real workload.
+
+IF APK INFO SUCCEEDS
+
+Do not stop.
+
+Preserve the exact successful output and immediately continue into stronger local package-manager behavior without inventing network prerequisites.
+
+Prefer:
+
+1. repeat `apk info` to prove persistence;
+2. query installed package metadata / local package database;
+3. exercise another read-only local `apk` command exposed by `apk --help`;
+4. if a real local `.apk` artifact already exists in the canonical environment, investigate local package inspection/install;
+5. otherwise continue with the next genuinely reachable local package-database behavior.
+
+Do not fabricate package artifacts merely to claim package installation.
+
+PLAYABLE ALPINE REGRESSION
+
+Before final handoff, re-prove:
+
+    echo morphic
+    echo second
+    pwd
+    ls /
+    cat /etc/alpine-release
+    cd /tmp
+    pwd
+    echo hello > /tmp/hello
+    cat /tmp/hello
+    echo hello | cat
+    echo still-alive
+
+A successful apk run does not count as clean if the persistent Alpine shell regresses.
+
+VALIDATION
+
+Run focused tests for every admitted mechanism and the project's canonical validation gates.
+
+At minimum preserve:
+
+    zig build test-recipe-run-hosted-morphic-runtime
+    zig build check
+
+plus the repository's normal canonical validation.
+
+FINAL HANDOFF
+
+Only at approximately the ~30-minute boundary, update the appropriate agentic-snowball report/handoff.
+
+Record:
+
+- starting commit;
+- Zig/QEMU versions;
+- exact Sv39 failure;
+- first bad producer;
+- mechanism changed;
+- focused tests;
+- every meaningful `apk info` retry;
+- whether `apk --version` still works;
+- whether `apk --help` still works;
+- exact `apk info` result;
+- any stronger local `apk` behavior;
+- Playable Alpine regression result;
+- validation result;
+- final commit SHA;
+- exactly one next causal blocker if incomplete.
+
+Do not stop merely because one bug was fixed.
+
+The goal of this run is maximum causal progress toward real `apk info`, not one isolated patch.
+
+Begin.

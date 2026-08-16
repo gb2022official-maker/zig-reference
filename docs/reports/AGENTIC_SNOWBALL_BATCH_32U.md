@@ -122,3 +122,54 @@ successful dependency loading and RELRO, calls musl `memset` with destination
 `0x8` (store page fault at PC `0x4004df9a`); repair only the first causal
 producer of that null-derived destination, then rerun unchanged `apk info` and
 the multi-child parent-restoration ladder immediately.
+
+## PR #98 P1 review follow-up
+
+This continuation started at 2026-08-16 03:26 UTC from the supplied PR worktree
+(the requested remote head `21c722521308ad836a300921a80ebf61259afa34` was not
+present in this checkout and no remote was configured). It repaired both P1s
+before resuming QEMU pressure.
+
+Runtime mapping backing identity is now independent of current accessibility.
+A PROT_NONE reservation without backing receives zeroed bounded prepared
+backing before an RW/R/RX transition; a backed mapping changed to PROT_NONE
+keeps its class and offset, installs no leaf, and can be re-enabled from the
+same bytes. Runtime mprotect snapshots topology/cursor and prior leaves, rolls
+back on unmap/map failure, rejects W+X, and fences only after success. Focused
+tests cover unbacked PROT_NONE -> RW and backed RW -> PROT_NONE -> R while
+retaining the original backing offset.
+
+Fixed anonymous replacement now captures prior leaf physical addresses and
+permissions, prepares zeroed backing, and uses a neutral failure-atomic
+replacement transaction. A mid-map failure removes attempted leaves, restores
+prior leaves and mapping metadata, and leaves the caller-owned cursor
+unchanged. Its deterministic forced-failure test proves topology, bytes,
+leaves, and cursor conservation. The focused recipe step now executes these
+tests and the previously added fork-private snapshot test directly.
+
+Real QEMU then re-proved `/sbin/apk --version` with exact output
+`apk-tools 2.14.9, compiled for riscv64.` and a following parent-shell marker.
+`/sbin/apk --help` again reached real apk and printed the identification line,
+then the inherited post-child parent store fault at `0x80400168`; a full help
+listing is not claimed. Fresh `apk info` was retried once unchanged: all four
+dependencies and RELRO completed, then the same musl `memset` PC
+`0x4004df9a` stored to `0x8`. No speculative syscall repair was admitted.
+
+The canonical Playable Alpine gate passed again with `morphic`, `second`, `/`,
+the real root listing, `3.22.0`, `/tmp`, both `hello` results, and
+`still-alive` before the bounded host timeout.
+
+Follow-up validation executed `zig build test-recipe-run-hosted-morphic-runtime`,
+the canonical namespace acquisition and namespace-backed install, the real
+version/help/info/Playable QEMU commands, `zig build check --summary all`,
+`python3 tools/developer-command.py validate-repository`, the command-reference
+check, and `git diff --check`. Changed files are `build.zig`, `COMMANDS.md`,
+this report, `bounded_runtime_mappings.zig`, `freestanding_riscv64.zig`, and
+new `bounded_mapping_replacement.zig`. The final implementation commit is
+`d1f0918d01616c50233df11775596a70efd4f3fe`; the report persistence commit is
+the commit containing this follow-up.
+
+**Exactly one next causal blocker:** trace the real fresh-`apk info` call chain
+backward from musl `memset` at `0x4004df9a` to identify the first producer of
+its null-derived destination `0x8`, repair only that general semantic defect,
+and immediately rerun unchanged `apk info`.

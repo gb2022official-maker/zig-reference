@@ -743,3 +743,10 @@ anonymous replacement, relative symlink resolution, and Linux/RV64 mprotect.
 The same real machine reached `/sbin/apk --help` output and began `apk info`;
 `docs/reports/AGENTIC_SNOWBALL_BATCH_32U.md` records the exact remaining
 boundary. No runnable command surface changed.
+
+The PR #98 Batch 32U review repair made runtime `mprotect` transitions through
+PROT_NONE backing-aware and fixed-anonymous replacement failure-atomic. The
+focused recipe gate, real `/sbin/apk --version`, `/sbin/apk --help`, fresh
+`apk info`, and Playable Alpine commands were rerun; the version milestone and
+persistent shell remain proved, while `apk info` retains the documented null-
+derived musl `memset` store-fault frontier. No runnable command was added.

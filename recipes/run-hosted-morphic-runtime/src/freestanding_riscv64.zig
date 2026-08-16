@@ -20,6 +20,7 @@ const bounded_syscall_evidence = @import("bounded_syscall_evidence.zig");
 const bounded_mapping_preflight = @import("bounded_mapping_preflight.zig");
 const linux_rv64_clone_request = @import("linux_rv64_clone_request.zig");
 const bounded_fork_private_backing = @import("bounded_fork_private_backing.zig");
+const bounded_mapping_replacement = @import("bounded_mapping_replacement.zig");
 const linux_rv64_fdupfd = @import("linux_rv64_fdupfd.zig");
 const linux_rv64_dup3 = @import("linux_rv64_dup3.zig");
 const linux_rv64_fstat = @import("linux_rv64_fstat.zig");
@@ -1888,6 +1889,100 @@ const ExternalFileMmapContext = struct {
     }
 };
 
+const FixedAnonymousContext = struct {
+    address: usize,
+    backing_start: usize,
+    prior_present: [prepared_image_pages]bool = .{false} ** prepared_image_pages,
+    prior_physical: [prepared_image_pages]usize = .{0} ** prepared_image_pages,
+    prior_permissions: [prepared_image_pages]sv39_entries.Permissions = undefined,
+
+    fn capture(self: *@This(), page_count: usize) void {
+        for (0..page_count) |index| {
+            const leaf = batch26_builder.query(self.address + index * frames.PageSize) catch continue;
+            if (leaf.raw_entry & 1 == 0 or leaf.raw_entry & 0xe == 0) continue;
+            self.prior_present[index] = true;
+            self.prior_physical[index] = leaf.physical_address;
+            self.prior_permissions[index] = .{
+                .read = leaf.raw_entry & 0x2 != 0,
+                .write = leaf.raw_entry & 0x4 != 0,
+                .execute = leaf.raw_entry & 0x8 != 0,
+                .user = leaf.raw_entry & 0x10 != 0,
+                .accessed = leaf.raw_entry & 0x40 != 0,
+                .dirty = leaf.raw_entry & 0x80 != 0,
+            };
+        }
+    }
+
+    pub fn replacePage(self: *@This(), index: usize) !void {
+        const virtual = self.address + index * frames.PageSize;
+        if (self.prior_present[index]) _ = try batch26_builder.unmapPage(virtual, .page_4k);
+        _ = try batch26_builder.mapPage(virtual, @intFromPtr(&external_prepared_backing[self.backing_start + index]), .page_4k, .{ .read = true, .write = true, .user = true, .accessed = true, .dirty = true });
+    }
+
+    pub fn restorePages(self: *@This(), count: usize) !void {
+        for (0..count) |index| {
+            const virtual = self.address + index * frames.PageSize;
+            if (externalPageOccupied({}, virtual)) _ = try batch26_builder.unmapPage(virtual, .page_4k);
+            if (self.prior_present[index])
+                _ = try batch26_builder.mapPage(virtual, self.prior_physical[index], .page_4k, self.prior_permissions[index]);
+        }
+        asm volatile ("sfence.vma" ::: "memory");
+    }
+};
+
+fn externalRuntimeMprotect(address: usize, length: usize, protection: usize) ?usize {
+    if (!external_runtime_mappings.containsRange(address, length)) return null;
+    const permissions: runtime_mappings.Permissions = .{ .read = protection & 1 != 0, .write = protection & 2 != 0, .execute = protection & 4 != 0 };
+    const page_count = ExternalRuntimeMappings.pageCount(length) catch return negativeErrno(22);
+    if (page_count > prepared_image_pages) return externalMmapNoMemory("mprotect-page-bound");
+    const original = external_runtime_mappings;
+    const original_cursor = external_next_backing;
+    const first = external_runtime_mappings.mappingAt(address) orelse return negativeErrno(22);
+    const needs_backing = ExternalRuntimeMappings.isAccessible(.{ .start = address, .end = address + length, .permissions = permissions }) and !ExternalRuntimeMappings.hasBacking(first);
+    var backing_end = external_next_backing;
+    if (needs_backing) {
+        backing_end = std.math.add(usize, backing_end, page_count) catch return externalMmapNoMemory("mprotect-backing-overflow");
+        if (backing_end > prepared_image_pages) return externalMmapNoMemory("mprotect-backing-capacity");
+        for (external_prepared_backing[external_next_backing..backing_end]) |*backing| @memset(backing, 0);
+    }
+
+    var prior = FixedAnonymousContext{ .address = address, .backing_start = 0 };
+    prior.capture(page_count);
+    if (needs_backing)
+        external_runtime_mappings.replaceBackingRange(address, length, permissions, .prepared, external_next_backing) catch return externalMmapNoMemory("mprotect-mapping-capacity")
+    else
+        external_runtime_mappings.protectRange(address, length, permissions) catch return externalMmapNoMemory("mprotect-mapping-capacity");
+
+    var changed: usize = 0;
+    while (changed < page_count) : (changed += 1) {
+        const virtual = address + changed * frames.PageSize;
+        if (externalPageOccupied({}, virtual)) _ = batch26_builder.unmapPage(virtual, .page_4k) catch {
+            prior.restorePages(changed) catch unreachable;
+            external_runtime_mappings = original;
+            external_next_backing = original_cursor;
+            return externalMmapNoMemory("mprotect-unmap");
+        };
+        if (ExternalRuntimeMappings.isAccessible(external_runtime_mappings.mappingAt(virtual).?)) {
+            const mapping = external_runtime_mappings.mappingAt(virtual).?;
+            const backing_index = mapping.backing_start + (virtual - mapping.start) / frames.PageSize;
+            const physical = switch (mapping.backing_class) {
+                .prepared => @intFromPtr(&external_prepared_backing[backing_index]),
+                .private_file => @intFromPtr(&external_private_file_backing[backing_index]),
+                .none => unreachable,
+            };
+            _ = batch26_builder.mapPage(virtual, physical, .page_4k, .{ .read = permissions.read, .write = permissions.write, .execute = permissions.execute, .user = true, .accessed = true, .dirty = permissions.write }) catch {
+                prior.restorePages(changed + 1) catch unreachable;
+                external_runtime_mappings = original;
+                external_next_backing = original_cursor;
+                return externalMmapNoMemory("mprotect-map");
+            };
+        }
+    }
+    external_next_backing = backing_end;
+    asm volatile ("sfence.vma; fence.i" ::: "memory");
+    return 0;
+}
+
 fn externalFileMmap(length: usize, protection: usize, flags: usize, descriptor: usize, offset: usize) usize {
     const description = linux_rv64_file_mmap.resolveRegular(&syscall_resources, &syscall_bindings, descriptor, 0x101) catch |err| return negativeErrno(switch (err) {
         error.BadDescriptor => 9,
@@ -2296,17 +2391,13 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                     frame.x[10] = externalMmapNoMemory("fixed-anonymous-backing-capacity");
                     return finishReturningSyscall(frame, index);
                 }
-                external_runtime_mappings.replaceBackingRange(address, length, .{ .read = true, .write = true }, .prepared, external_next_backing) catch {
-                    frame.x[10] = externalMmapNoMemory("fixed-anonymous-mapping-capacity");
+                for (external_prepared_backing[external_next_backing..backing_end]) |*backing| @memset(backing, 0);
+                var replacement = FixedAnonymousContext{ .address = address, .backing_start = external_next_backing };
+                replacement.capture(page_count);
+                bounded_mapping_replacement.replace(&external_runtime_mappings, address, length, .{ .read = true, .write = true }, .prepared, external_next_backing, page_count, &replacement) catch {
+                    frame.x[10] = externalMmapNoMemory("fixed-anonymous-map");
                     return finishReturningSyscall(frame, index);
                 };
-                for (external_prepared_backing[external_next_backing..backing_end]) |*backing| @memset(backing, 0);
-                var page: usize = 0;
-                while (page < page_count) : (page += 1) {
-                    const virtual = address + page * frames.PageSize;
-                    if (externalPageOccupied({}, virtual)) _ = batch26_builder.unmapPage(virtual, .page_4k) catch shutdown();
-                    _ = batch26_builder.mapPage(virtual, @intFromPtr(&external_prepared_backing[external_next_backing + page]), .page_4k, .{ .read = true, .write = true, .user = true, .accessed = true, .dirty = true }) catch shutdown();
-                }
                 external_next_backing = backing_end;
                 asm volatile ("sfence.vma" ::: "memory");
                 frame.x[10] = address;
@@ -2416,11 +2507,19 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                 return finishReturningSyscall(frame, index);
             };
             const mapped_length = rounded & ~@as(usize, frames.PageSize - 1);
+            if (protection & ~@as(usize, 7) != 0 or protection & 2 != 0 and protection & 4 != 0) {
+                frame.x[10] = negativeErrno(22);
+                return finishReturningSyscall(frame, index);
+            }
+            if (externalRuntimeMprotect(address, mapped_length, protection)) |result| {
+                frame.x[10] = result;
+                return finishReturningSyscall(frame, index);
+            }
             var owned = mapped_length != 0 and address & (frames.PageSize - 1) == 0;
             var ownership_page = address;
             while (owned and ownership_page < address + mapped_length) : (ownership_page += frames.PageSize)
                 owned = externalProcessOwnsPage(ownership_page);
-            if (!owned or protection & ~@as(usize, 7) != 0 or protection & 2 != 0 and protection & 4 != 0) {
+            if (!owned) {
                 frame.x[10] = negativeErrno(22);
             } else {
                 if (external_runtime_mappings.containsRange(address, mapped_length))
@@ -2487,7 +2586,7 @@ fn recordLinuxRv64Syscall(frame: *TrapFrame) void {
                     // Fixed PROT_NONE reservations own virtual range but have
                     // neither a leaf nor backing. Preserve them only in the
                     // neutral mapping table and do not consume a backing slot.
-                    if (!ExternalRuntimeMappings.hasBacking(mapping)) continue;
+                    if (!ExternalRuntimeMappings.isAccessible(mapping)) continue;
                     var page = mapping.start;
                     while (page < mapping.end) : (page += frames.PageSize) {
                         const backing_index = mapping.backing_start + (page - mapping.start) / frames.PageSize;

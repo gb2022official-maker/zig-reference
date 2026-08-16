@@ -24,6 +24,8 @@ pub fn BoundedRuntimeMappings(comptime capacity: usize, comptime page_size: usiz
 
     return struct {
         const Self = @This();
+        pub const PermissionsType = Permissions;
+        pub const BackingClassType = BackingClass;
         pub const Error = error{ InvalidRange, Collision, CapacityExceeded, WriteExecute };
 
         entries: [capacity]Mapping = undefined,
@@ -40,6 +42,10 @@ pub fn BoundedRuntimeMappings(comptime capacity: usize, comptime page_size: usiz
         /// A reservation with no access permissions intentionally owns virtual
         /// address space without consuming or installing data-page backing.
         pub fn hasBacking(mapping: Mapping) bool {
+            return mapping.backing_class != .none;
+        }
+
+        pub fn isAccessible(mapping: Mapping) bool {
             return mapping.permissions.read or mapping.permissions.write or mapping.permissions.execute;
         }
 
@@ -294,10 +300,24 @@ test "collision on the second page rejects the whole range" {
     try std.testing.expectEqual(@as(usize, 0), table.count);
 }
 
-test "no-access reservations remain unbacked while accessible mappings require backing" {
+test "backing identity is independent from current accessibility" {
     const Table = BoundedRuntimeMappings(2, 4096);
     try std.testing.expect(!Table.hasBacking(.{ .start = 0x1000, .end = 0x2000, .permissions = .{} }));
-    try std.testing.expect(Table.hasBacking(.{ .start = 0x2000, .end = 0x3000, .permissions = .{ .read = true } }));
+    try std.testing.expect(Table.hasBacking(.{ .start = 0x2000, .end = 0x3000, .permissions = .{}, .backing_class = .prepared }));
+}
+
+test "backed mapping retains identity while protection is disabled and restored" {
+    const Table = BoundedRuntimeMappings(1, 4096);
+    var table: Table = .{};
+    try table.reserve(0x1000, 4096, .{ .read = true, .write = true }, false, {}, neverOccupied);
+    table.setLastBacking(.prepared, 13);
+    try table.protectRange(0x1000, 4096, .{});
+    try std.testing.expect(Table.hasBacking(table.entries[0]));
+    try std.testing.expect(!Table.isAccessible(table.entries[0]));
+    try std.testing.expectEqual(@as(usize, 13), table.entries[0].backing_start);
+    try table.protectRange(0x1000, 4096, .{ .read = true });
+    try std.testing.expect(Table.isAccessible(table.entries[0]));
+    try std.testing.expectEqual(@as(usize, 13), table.entries[0].backing_start);
 }
 
 test "snapshot preserves backing identity and split cursor offsets" {
